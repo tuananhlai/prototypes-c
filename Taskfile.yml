@@ -1,0 +1,10 @@
+# yaml-language-server: $schema=https://taskfile.dev/schema.json
+
+version: '3'
+
+tasks:
+  run:
+    desc: Compile and run a C file
+    cmds:
+      - gcc {{.CLI_ARGS}} -o /tmp/a.out && /tmp/a.out
+    silent: true
