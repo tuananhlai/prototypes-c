@@ -4,6 +4,7 @@ version: '3'
 
 tasks:
   run:
+    dir: '{{.USER_WORKING_DIR}}'
     desc: Compile and run a C file
     cmds:
       - gcc {{.CLI_ARGS}} -o /tmp/a.out && /tmp/a.out
