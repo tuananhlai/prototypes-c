@@ -1,9 +1,11 @@
 
-all: va
+.PHONY: all clean
+
+all: va.out
 
 clean:
-	rm -f va
+	rm -f va.out
 
-va: va.c
-	gcc -o va va.c -Wall
+va.out: va.c
+	gcc -o va.out va.c -Wall
 

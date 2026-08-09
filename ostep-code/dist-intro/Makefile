@@ -5,12 +5,12 @@ SRCS   := client.c \
 	server.c 
 
 OBJS   := ${SRCS:c=o}
-PROGS  := ${SRCS:.c=}
+PROGS  := ${SRCS:.c=.out}
 
-.PHONY: all
+.PHONY: all clean
 all: ${PROGS}
 
-${PROGS} : % : %.o Makefile
+${PROGS} : %.out : %.o Makefile
 	${CC} $< -o $@ udp.c
 
 clean:

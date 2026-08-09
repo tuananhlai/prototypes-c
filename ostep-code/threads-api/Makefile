@@ -6,12 +6,12 @@ SRCS   := thread_create.c \
 	thread_create_with_return_args.c
 
 OBJS   := ${SRCS:c=o}
-PROGS  := ${SRCS:.c=}
+PROGS  := ${SRCS:.c=.out}
 
-.PHONY: all
+.PHONY: all clean
 all: ${PROGS}
 
-${PROGS} : % : %.o Makefile
+${PROGS} : %.out : %.o Makefile
 	${CC} $< -o $@ -pthread
 
 clean:

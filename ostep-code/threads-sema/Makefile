@@ -19,12 +19,12 @@ SRCS   := dining_philosophers_deadlock.c \
 	throttle.c 
 
 OBJS   := ${SRCS:c=o}
-PROGS  := ${SRCS:.c=}
+PROGS  := ${SRCS:.c=.out}
 
-.PHONY: all
+.PHONY: all clean
 all: ${PROGS}
 
-${PROGS} : % : %.o Makefile
+${PROGS} : %.out : %.o Makefile
 	${CC} $< -o $@ ${LIBS}
 
 clean:
