@@ -1,4 +1,5 @@
 {
     "C_Cpp.clang_format_fallbackStyle": "Google",
     "C_Cpp.default.cStandard": "c23",
+    "editor.tabSize": 2
 }
