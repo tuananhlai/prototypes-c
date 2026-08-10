@@ -3,12 +3,15 @@
 
 void selection_sort(int arr[], size_t n);
 void insertion_sort(int arr[], size_t n);
+void insertion_sort_range(int arr[], size_t lo, size_t hi);
 void merge(int arr[], size_t lo1, size_t hi1, size_t hi2);
 void merge_sort(int arr[], size_t n);
 void merge_sort_recursive(int arr[], size_t lo, size_t hi);
 void quick_sort(int arr[], size_t n);
 void quick_sort_recursive(int arr[], size_t lo, size_t hi);
 void swap(int arr[], size_t i, size_t j);
+
+const int CUTOFF = 5;
 
 int main(int argc, char const* argv[]) {
   // int arr[] = {10, 5, 2, 6, 3, 1, 2, 8};
@@ -20,7 +23,7 @@ int main(int argc, char const* argv[]) {
   // }
 
   int arr2[] = {10, 5, 2, 6, 3, 1, 2, 8};
-  quick_sort(arr2, 8);
+  merge_sort(arr2, 8);
   for (int i = 0; i < 8; i++) {
     printf("%d\n", arr2[i]);
   }
@@ -28,12 +31,14 @@ int main(int argc, char const* argv[]) {
   return EXIT_SUCCESS;
 }
 
-void insertion_sort(int arr[], size_t n) {
-  int j, tmp;
-  for (int i = 1; i < n; i++) {
+void insertion_sort(int arr[], size_t n) { insertion_sort_range(arr, 0, n); }
+
+void insertion_sort_range(int arr[], size_t lo, size_t hi) {
+  int j;
+  for (int i = lo + 1; i < hi; i++) {
     j = i;
 
-    while (j > 0 && arr[j] < arr[j - 1]) {
+    while (j > lo && arr[j] < arr[j - 1]) {
       swap(arr, j, j - 1);
       j--;
     }
@@ -56,10 +61,15 @@ void selection_sort(int arr[], size_t n) {
 void merge_sort(int arr[], size_t n) { merge_sort_recursive(arr, 0, n); }
 
 void merge_sort_recursive(int arr[], size_t lo, size_t hi) {
-  if (hi <= lo + 1) return;
+  if (hi <= lo + CUTOFF) {
+    insertion_sort_range(arr, lo, hi);
+    return;
+  }
+
   size_t mid = (lo + hi) / 2;
   merge_sort_recursive(arr, lo, mid);
   merge_sort_recursive(arr, mid, hi);
+
   size_t arr1_len = mid - lo;
   size_t arr2_len = hi - mid;
   merge(arr, lo, mid, hi);
@@ -96,7 +106,10 @@ void merge(int arr[], size_t lo1, size_t hi1, size_t hi2) {
 void quick_sort(int arr[], size_t n) { quick_sort_recursive(arr, 0, n); }
 
 void quick_sort_recursive(int arr[], size_t lo, size_t hi) {
-  if (hi <= lo + 1) return;
+  if (hi <= lo + CUTOFF) {
+    insertion_sort_range(arr, lo, hi);
+    return;
+  }
 
   int anchor = arr[lo];
   int i = lo + 1;
