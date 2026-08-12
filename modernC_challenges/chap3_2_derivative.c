@@ -13,7 +13,7 @@ double calculate(Derivative* de, double x) {
 
 double square(double x) { return x * x; }
 
-int main(int argc, char const* argv[]) {
+int main() {
   Derivative derivative = {square};
   double result = calculate(&derivative, 29);
   printf("%f\n", result);
