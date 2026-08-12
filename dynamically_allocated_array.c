@@ -1,9 +1,9 @@
 #include <stdio.h>
 #include <stdlib.h>
 
-int main(int argc, char const *argv[])
+int main()
 {
-    int count = 3;
+    size_t count = 3;
     int *arr = malloc(count * sizeof(int));
 
     // Doesn't work as expected.
@@ -19,6 +19,6 @@ int main(int argc, char const *argv[])
 
     free(arr);
         
-    printf("%d\n", arr[1]);
+    // printf("%d\n", arr[1]);
     return 0;
 }
