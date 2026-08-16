@@ -3,18 +3,18 @@
 #include <string.h>
 
 int main(void) {
-  int32_t minus_one = 0xffff'ffff;
-  printf("0xFFFFFFFF as signed int32_t: %d\n", minus_one);
+  uint32_t minus_one = 0xffff'ffff;
+  printf("0xFFFFFFFF as signed int32_t: %d\n", (int32_t) minus_one);
 
-  int32_t minus_two_bil = 0x8000'0000;
-  printf("0x80000000 (INT32_MIN) as signed int32_t: %d\n", minus_two_bil);
+  uint32_t minus_two_bil = 0x8000'0000;
+  printf("0x80000000 (INT32_MIN) as signed int32_t: %d\n", (int32_t) minus_two_bil);
 
   uint32_t bits = 0b0'0111'1111'1100'0000'0000'0000'0000'000;
   float f;
   memcpy(&f, &bits, sizeof(uint32_t));
   printf("IEEE 754 bit pattern (0x%08X) as float: %f\n", bits, f);
 
-  f = -0.3;
+  f = -0.3125;
   memcpy(&bits, &f, sizeof(uint32_t));
   printf("Float %f as IEEE 754 binary [Sign Exp Mantissa]: %b %08b %023b\n",
          f, bits >> 31, (bits >> 23) & 0xFF, bits & 0x7FFFFF);
