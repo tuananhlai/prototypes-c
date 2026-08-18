@@ -1,0 +1,17 @@
+# https://clangd.llvm.org/installation#project-setup
+# https://clangd.llvm.org/config
+CompileFlags:
+  Add: 
+    - "-std=c23"
+    
+    # Strict Warning Rules
+    - "-Wall"
+    - "-Wextra"
+    - "-Wpedantic"
+    - "-Wformat=2"
+    
+    # Debugging and Sanitization
+    - "-g3"
+    - "-O0"
+    - "-fsanitize=address,undefined"
+    - "-fno-omit-frame-pointer"
