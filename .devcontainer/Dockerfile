@@ -1,6 +1,7 @@
 FROM mcr.microsoft.com/devcontainers/base:trixie
 
 # Install LLVM and clangd.
+# https://apt.llvm.org/
 RUN bash -c "$(wget -O - https://apt.llvm.org/llvm.sh)"
 
 # Use `zsh` as the default shell.
