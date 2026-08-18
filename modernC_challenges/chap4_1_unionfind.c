@@ -1,5 +1,6 @@
 #include <stdio.h>
 #include <stdlib.h>
+#include <stdbool.h>
 
 typedef struct {
   size_t* parent;
@@ -82,7 +83,6 @@ int main() {
   
   printf("Are 0 and 3 connected now? %s (Expected: Yes)\n", uf_connected(uf, 0, 3) ? "Yes" : "No");
   printf("Are 0 and 9 connected? %s (Expected: No)\n", uf_connected(uf, 0, 9) ? "Yes" : "No");
-
 
   uf_destroy(uf);
   return 0;
