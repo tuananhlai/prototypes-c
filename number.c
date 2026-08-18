@@ -3,14 +3,14 @@
 #include <string.h>
 
 int main(void) {
-  uint32_t minus_one = 0xffffffff;
+  uint32_t minus_one = 0xffff'ffff;
   printf("0xFFFFFFFF as signed int32_t: %d\n", (int32_t)minus_one);
 
-  uint32_t minus_two_bil = 0x80000000;
+  uint32_t minus_two_bil = 0x8000'0000;
   printf("0x80000000 (INT32_MIN) as signed int32_t: %d\n",
          (int32_t)minus_two_bil);
 
-  uint32_t bits = 0b00111111111000000000000000000000;
+  uint32_t bits = 0b0'01111111'11000000000000000000000;
   float f;
   memcpy(&f, &bits, sizeof(uint32_t));
   printf("IEEE 754 bit pattern (0x%08X) as float: %f\n", bits, f);
