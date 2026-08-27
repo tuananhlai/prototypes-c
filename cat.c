@@ -1,8 +1,14 @@
 #include <stdio.h>
 #include <stdlib.h>
 
-int main(void) {
-  FILE *fp = fopen("Taskfile.yml", "r");
+int main(int argc, char* argv[]) {
+  FILE* fp;
+  if (argc == 1) {
+    fp = stdin;
+  } else {
+    fp = fopen(argv[1], "r");
+  }
+
   int ch;
 
   if (fp == NULL) {
