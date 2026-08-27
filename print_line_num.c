@@ -1,22 +1,23 @@
+#include <stddef.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <sys/types.h>
 
-char* readline(FILE* fp);
+ssize_t readline(FILE* fp, char** lineptr, size_t* capacity);
 
-int main(void) {
-  size_t target_line_num = 8;
+int main(int argc, char* argv[]) {
+  if (argc != 3) {
+    fprintf(stderr, "invalid number of arguments: %d\n", argc);
+    return EXIT_FAILURE;
+  }
 
-  FILE* fp = fopen("Taskfile.yml", "r");
+  size_t target_line_num = atoi(argv[2]);
+  FILE* fp = fopen(argv[1], "r");
 
   char* line;
-  size_t current_line_num = 1;
-  while (true) {
-    line = readline(fp);
-    if (current_line_num == target_line_num) {
-      break;
-    }
-    free(line);
-    current_line_num++;
+  size_t capacity = 0;
+  for (size_t i = 0; i < target_line_num; i++) {
+    readline(fp, &line, &capacity);
   }
 
   puts(line);
@@ -25,29 +26,29 @@ int main(void) {
   return EXIT_SUCCESS;
 }
 
-char* readline(FILE* fp) {
-  size_t length = 0;
-  size_t capacity = 128;
-  char* line = malloc(capacity * sizeof(char));
+ssize_t readline(FILE* fp, char** lineptr, size_t* capacity) {
+  if (lineptr == NULL || *capacity == 0) {
+    *capacity = 128;
+    *lineptr = malloc(*capacity * sizeof(char));
+  }
 
   int ch;
-  while ((ch = fgetc(fp)) != EOF) {
+  size_t length = 0;
+  while (true) {
+    if (length + 1 >= *capacity) {
+      *capacity *= 2;
+      *lineptr = realloc(*lineptr, *capacity);
+    }
+    ch = fgetc(fp);
     if (ch == '\n') {
-      line[length] = '\0';
+      (*lineptr)[length] = '\0';
       break;
     }
-    line[length] = ch;
+    (*lineptr)[length] = ch;
     length++;
-    if (length == capacity - 1) {
-      capacity *= 2;
-      line = realloc(line, capacity);
-    }
   }
 
-  if (length == 0) {
-    free(line);
-    return NULL;
-  }
+  if (length == 0) return -1;
 
-  return line;
+  return (ssize_t)length;
 }
