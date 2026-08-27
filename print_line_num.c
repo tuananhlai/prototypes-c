@@ -1,27 +1,53 @@
-#include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
 
+char* readline(FILE* fp);
+
 int main(void) {
-  uint32_t target_line_num = 6;
+  size_t target_line_num = 8;
 
   FILE* fp = fopen("Taskfile.yml", "r");
 
+  char* line;
+  size_t current_line_num = 1;
+  while (true) {
+    line = readline(fp);
+    if (current_line_num == target_line_num) {
+      break;
+    }
+    free(line);
+    current_line_num++;
+  }
+
+  puts(line);
+  free(line);
+  fclose(fp);
+  return EXIT_SUCCESS;
+}
+
+char* readline(FILE* fp) {
+  size_t length = 0;
+  size_t capacity = 128;
+  char* line = malloc(capacity * sizeof(char));
+
   int ch;
-  uint32_t current_line_num = 1;
-  while (current_line_num < target_line_num) {
-    ch = fgetc(fp);
+  while ((ch = fgetc(fp)) != EOF) {
     if (ch == '\n') {
-      current_line_num++;
+      line[length] = '\0';
+      break;
+    }
+    line[length] = ch;
+    length++;
+    if (length == capacity - 1) {
+      capacity *= 2;
+      line = realloc(line, capacity);
     }
   }
 
-  ch = 0;
-  while (ch != '\n') {
-    ch = fgetc(fp);
-    putchar(ch);
+  if (length == 0) {
+    free(line);
+    return NULL;
   }
 
-  fclose(fp);
-  return EXIT_SUCCESS;
+  return line;
 }
