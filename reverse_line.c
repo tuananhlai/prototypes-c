@@ -15,19 +15,23 @@ int main(int argc, char* argv[]) {
   }
 
   FILE* src = fopen(argv[1], "r");
+  if (src == NULL) {
+    perror("error opening src");
+    return EXIT_FAILURE;
+  }
+
   FILE* dest;
   if (argc >= 3) {
     dest = fopen(argv[2], "w");
   } else {
     dest = stdout;
   }
-
-  if (src == NULL) {
-    perror("cat.c");
+  if (dest == NULL) {
+    perror("error opening dest");
     return EXIT_FAILURE;
   }
 
-  char* line;
+  char* line = NULL;
   size_t capacity = 0;
   ssize_t length = 0;
   while (true) {
@@ -41,6 +45,7 @@ int main(int argc, char* argv[]) {
   }
 
   free(line);
+  fclose(dest);
   fclose(src);
   return EXIT_SUCCESS;
 }
