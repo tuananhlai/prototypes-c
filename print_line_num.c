@@ -26,6 +26,11 @@ int main(int argc, char* argv[]) {
   return EXIT_SUCCESS;
 }
 
+/**
+ * @brief Read a line from a file stream into a dynamically allocated buffer.
+ * @return The line length (not including terminating null character), or -1 if
+ * we reached EOF.
+ */
 ssize_t readline(FILE* fp, char** lineptr, size_t* capacity) {
   if (lineptr == NULL || *capacity == 0) {
     *capacity = 128;
@@ -40,7 +45,7 @@ ssize_t readline(FILE* fp, char** lineptr, size_t* capacity) {
       *lineptr = realloc(*lineptr, *capacity);
     }
     ch = fgetc(fp);
-    if (ch == '\n') {
+    if (ch == '\n' || ch == EOF) {
       (*lineptr)[length] = '\0';
       break;
     }
@@ -48,7 +53,7 @@ ssize_t readline(FILE* fp, char** lineptr, size_t* capacity) {
     length++;
   }
 
-  if (length == 0) return -1;
+  if (ch == EOF) return -1;
 
   return (ssize_t)length;
 }
