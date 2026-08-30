@@ -260,32 +260,11 @@ Code code_create() {
   return c;
 }
 
-int code_dest(Code c, String* mnemonic, String* out_binary) {
-  char* binary = shget(c.dest_mp, mnemonic->data);
-  if (binary == NULL) {
-    return -1;
-  }
-  s_set(out_binary, binary, strlen(binary));
-  return 0;
-}
+char* code_dest(Code c, char* mnemonic) { return shget(c.dest_mp, mnemonic); }
 
-int code_comp(Code c, String* mnemonic, String* out_binary) {
-  char* binary = shget(c.comp_mp, mnemonic->data);
-  if (binary == NULL) {
-    return -1;
-  }
-  s_set(out_binary, binary, strlen(binary));
-  return 0;
-}
+char* code_comp(Code c, char* mnemonic) { return shget(c.comp_mp, mnemonic); }
 
-int code_jump(Code c, String* mnemonic, String* out_binary) {
-  char* binary = shget(c.jump_mp, mnemonic->data);
-  if (binary == NULL) {
-    return -1;
-  }
-  s_set(out_binary, binary, strlen(binary));
-  return 0;
-}
+char* code_jump(Code c, char* mnemonic) { return shget(c.jump_mp, mnemonic); }
 
 void code_destroy(Code* c) {
   shfree(c->dest_mp);
@@ -293,23 +272,19 @@ void code_destroy(Code* c) {
   shfree(c->jump_mp);
 }
 
-void a_instruction(String* symbol, String* out) {
-  int memory_addr = atoi(symbol->data);
-  char binary[16];
-
+/** Write a 16-bit binary A instruction from the given symbol (i. "1234") to `out`. */
+void a_instruction(char* symbol, char out[17]) {
+  int memory_addr = atoi(symbol);
   for (int i = 15; i >= 0; i--) {
-    binary[i] = (memory_addr % 2) + '0';
+    out[i] = (memory_addr % 2) + '0';
     memory_addr = memory_addr >> 1;
   }
-
-  s_set(out, binary, 16);
+  out[16] = '\0';
 }
 
-void c_instruction(String* comp, String* dest, String* jump, String* out) {
-  s_set(out, "111", 3);
-  s_append(out, comp->data, comp->len);
-  s_append(out, dest->data, dest->len);
-  s_append(out, jump->data, jump->len);
+/** Write a 16-bit binary C instruction from the binary representation of comp, dest and jump to `out`. */
+void c_instruction(char* comp, char* dest, char* jump, char out[17]) {
+  snprintf(out, 17, "111%s%s%s", comp, dest, jump);
 }
 
 int main(void) {
@@ -321,43 +296,31 @@ int main(void) {
 
   String symbol = s_new();
   String dest = s_new();
-  String dest_binary = s_new();
   String comp = s_new();
-  String comp_binary = s_new();
   String jump = s_new();
-  String jump_binary = s_new();
-  String c_ins = s_new();
-  String a_ins = s_new();
+  char instruction[17];
   while (parser_has_more_lines(p)) {
     parser_advance(p);
     if (parser_instruction_type(p) == A_INSTRUCTION) {
       parser_symbol(p, &symbol);
-      a_instruction(&symbol, &a_ins);
-      fputs(a_ins.data, out_f);
+      a_instruction(symbol.data, instruction);
     } else if (parser_instruction_type(p) == C_INSTRUCTION) {
       parser_dest(p, &dest);
-      code_dest(c, &dest, &dest_binary);
       parser_comp(p, &comp);
-      code_comp(c, &comp, &comp_binary);
       parser_jump(p, &jump);
-      code_jump(c, &jump, &jump_binary);
-      c_instruction(&comp_binary, &dest_binary, &jump_binary, &c_ins);
-      fputs(c_ins.data, out_f);
+      c_instruction(code_comp(c, comp.data), code_dest(c, dest.data),
+                    code_jump(c, jump.data), instruction);
     }
 
+    fputs(instruction, out_f);
     if (parser_has_more_lines(p)) {
       fputc('\n', out_f);
     }
   }
 
   // Clean up.
-  s_destroy(&a_ins);
-  s_destroy(&c_ins);
-  s_destroy(&jump_binary);
   s_destroy(&jump);
-  s_destroy(&comp_binary);
   s_destroy(&comp);
-  s_destroy(&dest_binary);
   s_destroy(&dest);
   s_destroy(&symbol);
   code_destroy(&c);
