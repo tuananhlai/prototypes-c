@@ -10,7 +10,38 @@ typedef struct {
   size_t cap;
 } String;
 
-/** @brief Rellocate the given string s if necessary to accomodate a string with the given length. */
+typedef enum {
+  A_INSTRUCTION,
+  C_INSTRUCTION,
+  L_INSTRUCTION,
+} InstructionType;
+
+typedef struct {
+  FILE* f;
+  String cur_ins;
+  String next_ins;
+} Parser;
+
+static void s_realloc_if_needed(String* s, size_t new_len);
+void s_set(String* s, const char* val, size_t len);
+String s_init(const char* val, size_t len);
+String s_new(void);
+void s_add(String* s, char ch);
+void s_concat(String* s, const char* val, size_t len);
+void s_trim(String* s);
+void s_destroy(String* s);
+
+int readline(FILE* fp, String* s);
+
+Parser* parser_open(FILE* f);
+bool parser_has_more_lines(Parser* p);
+void parser_advance(Parser* p);
+InstructionType parser_instruction_type(Parser* p);
+int parser_symbol(Parser* p, String* s);
+void parser_destroy(Parser* p);
+
+/** @brief Rellocate the given string s if necessary to accomodate a string with
+ * the given length. */
 static void s_realloc_if_needed(String* s, size_t new_len) {
   if (new_len + 1 <= s->cap) {
     return;
@@ -33,8 +64,11 @@ String s_init(const char* val, size_t len) {
   return s;
 }
 
-String s_new() { return s_init("", 0); }
+String s_new(void) { return s_init("", 0); }
 
+void s_copy(String* dest, String* src) { s_set(dest, src->data, src->len); }
+
+/** Append the given character to String s. */
 void s_add(String* s, char ch) {
   size_t new_len = s->len + 1;
   s_realloc_if_needed(s, new_len);
@@ -94,37 +128,27 @@ int readline(FILE* fp, String* s) {
   return 0;
 }
 
-typedef enum {
-  A_INSTRUCTION,
-  C_INSTRUCTION,
-  L_INSTRUCTION,
-} InstructionType;
-
-typedef struct {
-  FILE* f;
-  String cur_ins;
-  bool has_more;
-} Parser;
-
 Parser* parser_open(FILE* f) {
   Parser* p = malloc(sizeof(Parser));
   p->f = f;
-  p->has_more = true;
   p->cur_ins = s_new();
+  p->next_ins = s_new();
+  parser_advance(p);
   return p;
 }
 
-bool parser_has_more_lines(Parser* p) { return p->has_more; }
+bool parser_has_more_lines(Parser* p) { return p->next_ins.len > 0; }
 
 void parser_advance(Parser* p) {
+  s_copy(&p->cur_ins, &p->next_ins);
+
   while (true) {
-    int res = readline(p->f, &p->cur_ins);
+    int res = readline(p->f, &p->next_ins);
     if (res == EOF) {
-      p->has_more = false;
       return;
     }
-    s_trim(&p->cur_ins);
-    if (p->cur_ins.len != 0) {
+    s_trim(&p->next_ins);
+    if (p->next_ins.len != 0) {
       break;
     }
   }
@@ -165,6 +189,7 @@ int parser_symbol(Parser* p, String* s) {
 
 void parser_destroy(Parser* p) {
   s_destroy(&p->cur_ins);
+  s_destroy(&p->next_ins);
   free(p);
 }
 
@@ -175,13 +200,13 @@ int main(void) {
   Parser* p = parser_open(f);
 
   String symbol = s_new();
-  parser_advance(p);
-  parser_symbol(p, &symbol);
-  puts(symbol.data);
-
-  parser_advance(p);
-  parser_symbol(p, &symbol);
-  puts(symbol.data);
+  while (parser_has_more_lines(p)) {
+    parser_advance(p);
+    if (parser_instruction_type(p) == A_INSTRUCTION) {
+      parser_symbol(p, &symbol);
+      puts(symbol.data);
+    }
+  }
 
   // Clean up.
   s_destroy(&symbol);
