@@ -6,6 +6,8 @@
 #include <unistd.h>
 
 #include "dynamic_string.h"
+#define STB_DS_IMPLEMENTATION
+#include "stb_ds.h"
 
 typedef enum {
   A_INSTRUCTION,
@@ -174,41 +176,196 @@ void parser_destroy(Parser* p) {
   free(p);
 }
 
+typedef struct {
+  char* key;
+  char* value;
+} StrMap;
+
+typedef struct {
+  StrMap* dest_mp;
+  StrMap* comp_mp;
+  StrMap* jump_mp;
+} Code;
+
+StrMap* dest_map_create() {
+  StrMap* dest_mp = NULL;
+  shput(dest_mp, "", "000");
+  shput(dest_mp, "M", "001");
+  shput(dest_mp, "D", "010");
+  shput(dest_mp, "DM", "011");
+  shput(dest_mp, "A", "100");
+  shput(dest_mp, "AM", "101");
+  shput(dest_mp, "AD", "110");
+  shput(dest_mp, "ADM", "111");
+  return dest_mp;
+}
+
+StrMap* comp_map_create() {
+  StrMap* comp_mp = NULL;
+
+  // a == 0
+  shput(comp_mp, "0", "0101010");
+  shput(comp_mp, "1", "0111111");
+  shput(comp_mp, "-1", "0111010");
+  shput(comp_mp, "D", "0001100");
+  shput(comp_mp, "A", "0110000");
+  shput(comp_mp, "!D", "0001101");
+  shput(comp_mp, "!A", "0110001");
+  shput(comp_mp, "-D", "0001111");
+  shput(comp_mp, "-A", "0110011");
+  shput(comp_mp, "D+1", "0011111");
+  shput(comp_mp, "A+1", "0110111");
+  shput(comp_mp, "D-1", "0001110");
+  shput(comp_mp, "A-1", "0110010");
+  shput(comp_mp, "D+A", "0000010");
+  shput(comp_mp, "D-A", "0010011");
+  shput(comp_mp, "A-D", "0000111");
+  shput(comp_mp, "D&A", "0000000");
+  shput(comp_mp, "D|A", "0010101");
+
+  // a == 1: the same c bits, with A replaced by M.
+  shput(comp_mp, "M", "1110000");
+  shput(comp_mp, "!M", "1110001");
+  shput(comp_mp, "-M", "1110011");
+  shput(comp_mp, "M+1", "1110111");
+  shput(comp_mp, "M-1", "1110010");
+  shput(comp_mp, "D+M", "1000010");
+  shput(comp_mp, "D-M", "1010011");
+  shput(comp_mp, "M-D", "1000111");
+  shput(comp_mp, "D&M", "1000000");
+  shput(comp_mp, "D|M", "1010101");
+
+  return comp_mp;
+}
+
+StrMap* jump_map_create() {
+  StrMap* jump_mp = NULL;
+  shput(jump_mp, "", "000");
+  shput(jump_mp, "JGT", "001");
+  shput(jump_mp, "JEQ", "010");
+  shput(jump_mp, "JGE", "011");
+  shput(jump_mp, "JLT", "100");
+  shput(jump_mp, "JNE", "101");
+  shput(jump_mp, "JLE", "110");
+  shput(jump_mp, "JMP", "111");
+  return jump_mp;
+}
+
+Code code_create() {
+  Code c = {
+      .dest_mp = dest_map_create(),
+      .comp_mp = comp_map_create(),
+      .jump_mp = jump_map_create(),
+  };
+  return c;
+}
+
+int code_dest(Code c, String* mnemonic, String* out_binary) {
+  char* binary = shget(c.dest_mp, mnemonic->data);
+  if (binary == NULL) {
+    return -1;
+  }
+  s_set(out_binary, binary, strlen(binary));
+  return 0;
+}
+
+int code_comp(Code c, String* mnemonic, String* out_binary) {
+  char* binary = shget(c.comp_mp, mnemonic->data);
+  if (binary == NULL) {
+    return -1;
+  }
+  s_set(out_binary, binary, strlen(binary));
+  return 0;
+}
+
+int code_jump(Code c, String* mnemonic, String* out_binary) {
+  char* binary = shget(c.jump_mp, mnemonic->data);
+  if (binary == NULL) {
+    return -1;
+  }
+  s_set(out_binary, binary, strlen(binary));
+  return 0;
+}
+
+void code_destroy(Code* c) {
+  shfree(c->dest_mp);
+  shfree(c->comp_mp);
+  shfree(c->jump_mp);
+}
+
+void a_instruction(String* symbol, String* out) {
+  int memory_addr = atoi(symbol->data);
+  char binary[16];
+
+  for (int i = 15; i >= 0; i--) {
+    binary[i] = (memory_addr % 2) + '0';
+    memory_addr = memory_addr >> 1;
+  }
+
+  s_set(out, binary, 16);
+}
+
+void c_instruction(String* comp, String* dest, String* jump, String* out) {
+  s_set(out, "111", 3);
+  s_append(out, comp->data, comp->len);
+  s_append(out, dest->data, dest->len);
+  s_append(out, jump->data, jump->len);
+}
+
 int main(void) {
-  const char* text = "   \n @10  \nD=0;JMP\n@2023 \n M=A \n 0;JMP";
+  const char* text = "   \n @10  \nD=0;JMP\n@2023 \n M=A \n 0;JEQ";
   FILE* f = fmemopen((void*)text, strlen(text), "r");
+  FILE* out_f = fopen("tmp/out.asm", "a");
 
   Parser* p = parser_open(f);
+  Code c = code_create();
 
   String symbol = s_new();
   String dest = s_new();
+  String dest_binary = s_new();
   String comp = s_new();
+  String comp_binary = s_new();
   String jump = s_new();
+  String jump_binary = s_new();
+  String c_ins = s_new();
+  String a_ins = s_new();
   while (parser_has_more_lines(p)) {
     parser_advance(p);
     if (parser_instruction_type(p) == A_INSTRUCTION) {
       parser_symbol(p, &symbol);
-      puts(symbol.data);
+      a_instruction(&symbol, &a_ins);
+      fputs(a_ins.data, out_f);
+      fputc('\n', out_f);
       continue;
     }
 
     if (parser_instruction_type(p) == C_INSTRUCTION) {
       parser_dest(p, &dest);
-      puts(dest.data);
+      code_dest(c, &dest, &dest_binary);
       parser_comp(p, &comp);
-      puts(comp.data);
+      code_comp(c, &comp, &comp_binary);
       parser_jump(p, &jump);
-      puts(jump.data);
+      code_jump(c, &jump, &jump_binary);
+      c_instruction(&comp_binary, &dest_binary, &jump_binary, &c_ins);
+      fputs(c_ins.data, out_f);
+      fputc('\n', out_f);
       continue;
     }
   }
 
   // Clean up.
+  s_destroy(&a_ins);
+  s_destroy(&c_ins);
+  s_destroy(&jump_binary);
   s_destroy(&jump);
+  s_destroy(&comp_binary);
   s_destroy(&comp);
+  s_destroy(&dest_binary);
   s_destroy(&dest);
   s_destroy(&symbol);
+  code_destroy(&c);
   parser_destroy(p);
+  fclose(out_f);
   fclose(f);
   return EXIT_SUCCESS;
 }

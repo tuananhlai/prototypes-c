@@ -9,6 +9,7 @@ CompileFlags:
     - "-Wextra"
     - "-Wpedantic"
     - "-Wformat=2"
+    - "-xc"
 
     # Debugging and Sanitization
     - "-g3"
