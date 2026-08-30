@@ -9,7 +9,7 @@ typedef struct {
   size_t cap;
 } String;
 
-String s_create(const char* val, size_t len) {
+String s_init(const char* val, size_t len) {
   size_t cap = len + 1;
   char* data = malloc(cap * sizeof(char));
   String s = {.data = data, .len = len, .cap = cap};
@@ -49,7 +49,7 @@ void s_destroy(String s) { free(s.data); }
 
 int main(void) {
   char* init_data = "Hello, World!";
-  String s = s_create(init_data, strlen(init_data));
+  String s = s_init(init_data, strlen(init_data));
   char* concat_data = " Greeting!";
   s_concat(&s, concat_data, strlen(concat_data));
   char arr[] = {'a', 'b', 'c'};
