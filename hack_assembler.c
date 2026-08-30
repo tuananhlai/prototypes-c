@@ -10,6 +10,7 @@ typedef struct {
   size_t cap;
 } String;
 
+/** @brief Rellocate the given string s if necessary to accomodate a string with the given length. */
 static void s_realloc_if_needed(String* s, size_t new_len) {
   if (new_len + 1 <= s->cap) {
     return;
@@ -23,6 +24,7 @@ void s_set(String* s, const char* val, size_t len) {
   s_realloc_if_needed(s, len);
   memcpy(s->data, val, len);
   s->data[len] = '\0';
+  s->len = len;
 }
 
 String s_init(const char* val, size_t len) {
@@ -72,12 +74,12 @@ void s_destroy(String* s) {
 }
 
 /**
- * @brief Read a line from a file stream into a heap-allocated buffer.
- * The given char* pointer must be free if it's nolonger used.
- * @return The line length (not including terminating null character), or -1 if
- * we reached EOF.
+ * @brief Read a line from a file stream into a String.
+ * @return EOF (-1) if we reached EOF and no data were read. 0 otherwise.
  */
 int readline(FILE* fp, String* s) {
+  s_set(s, "", 0);
+
   int ch;
   while (true) {
     ch = fgetc(fp);
@@ -144,6 +146,8 @@ int parser_symbol(Parser* p, String* s) {
     return -1;
   }
 
+  s_set(s, "", 0);
+
   size_t pos = 0;
   if (p->cur_ins.data[pos] != '@') {
     return -1;
@@ -153,6 +157,7 @@ int parser_symbol(Parser* p, String* s) {
   while (pos < p->cur_ins.len && p->cur_ins.data[pos] >= '0' &&
          p->cur_ins.data[pos] <= '9') {
     s_add(s, p->cur_ins.data[pos]);
+    pos++;
   }
 
   return 0;
@@ -164,16 +169,22 @@ void parser_destroy(Parser* p) {
 }
 
 int main(void) {
-  const char* text = "   \n @10   ";
+  const char* text = "   \n @10  \n@2023 \n";
   FILE* f = fmemopen((void*)text, strlen(text), "r");
+
   Parser* p = parser_open(f);
-  printf("%d\n", parser_has_more_lines(p));
-  parser_advance(p);
-  
+
   String symbol = s_new();
+  parser_advance(p);
   parser_symbol(p, &symbol);
   puts(symbol.data);
 
+  parser_advance(p);
+  parser_symbol(p, &symbol);
+  puts(symbol.data);
+
+  // Clean up.
+  s_destroy(&symbol);
   parser_destroy(p);
   fclose(f);
   return EXIT_SUCCESS;
