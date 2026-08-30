@@ -1,3 +1,4 @@
+#include <stddef.h>
 #define _GNU_SOURCE
 #include <stdio.h>
 #include <stdlib.h>
@@ -102,6 +103,12 @@ void s_trim(String* s) {
   s->len = new_len;
 }
 
+void s_clear(String* s) { s_set(s, "", 0); }
+
+void s_substr(String* s, size_t start, size_t end, String* sub_str) {
+  s_set(sub_str, s->data + start, end - start);
+}
+
 void s_destroy(String* s) {
   free(s->data);
   s->data = NULL;
@@ -170,7 +177,7 @@ int parser_symbol(Parser* p, String* s) {
     return -1;
   }
 
-  s_set(s, "", 0);
+  s_clear(s);
 
   size_t pos = 0;
   if (p->cur_ins.data[pos] != '@') {
@@ -187,6 +194,63 @@ int parser_symbol(Parser* p, String* s) {
   return 0;
 }
 
+int parser_dest(Parser* p, String* out) {
+  if (parser_instruction_type(p) != C_INSTRUCTION) {
+    return -1;
+  }
+
+  s_clear(out);
+
+  size_t pos = 0;
+  while (pos < p->cur_ins.len && p->cur_ins.data[pos] != '=') {
+    pos++;
+  }
+
+  // No equal sign was found.
+  if (pos == p->cur_ins.len) {
+    return 0;
+  }
+
+  s_substr(&p->cur_ins, 0, pos, out);
+  return 0;
+}
+
+int parser_comp(Parser* p, String* out) {
+  if (parser_instruction_type(p) != C_INSTRUCTION) {
+    return -1;
+  }
+
+  s_clear(out);
+
+  size_t start = 0;
+  size_t end = 1;
+  while (end < p->cur_ins.len && p->cur_ins.data[end] != ';') {
+    if (p->cur_ins.data[end - 1] == '=') {
+      start = end;
+    }
+    end++;
+  }
+
+  s_substr(&p->cur_ins, start, end, out);
+  return 0;
+}
+
+int parser_jump(Parser* p, String* out) {
+  if (parser_instruction_type(p) != C_INSTRUCTION) {
+    return -1;
+  }
+
+  s_clear(out);
+
+  size_t start = 0;
+  while (start < p->cur_ins.len && p->cur_ins.data[start] != ';') {
+    start++;
+  }
+
+  s_substr(&p->cur_ins, start + 1, p->cur_ins.len, out);
+  return 0;
+}
+
 void parser_destroy(Parser* p) {
   s_destroy(&p->cur_ins);
   s_destroy(&p->next_ins);
@@ -194,21 +258,38 @@ void parser_destroy(Parser* p) {
 }
 
 int main(void) {
-  const char* text = "   \n @10  \n@2023 \n";
+  const char* text = "   \n @10  \nD=0;JMP\n@2023 \n";
   FILE* f = fmemopen((void*)text, strlen(text), "r");
 
   Parser* p = parser_open(f);
 
   String symbol = s_new();
+  String dest = s_new();
+  String comp = s_new();
+  String jump = s_new();
   while (parser_has_more_lines(p)) {
     parser_advance(p);
     if (parser_instruction_type(p) == A_INSTRUCTION) {
       parser_symbol(p, &symbol);
       puts(symbol.data);
+      continue;
+    }
+
+    if (parser_instruction_type(p) == C_INSTRUCTION) {
+      parser_dest(p, &dest);
+      puts(dest.data);
+      parser_comp(p, &comp);
+      puts(comp.data);
+      parser_jump(p, &jump);
+      puts(jump.data);
+      continue;
     }
   }
 
   // Clean up.
+  s_destroy(&jump);
+  s_destroy(&comp);
+  s_destroy(&dest);
   s_destroy(&symbol);
   parser_destroy(p);
   fclose(f);
