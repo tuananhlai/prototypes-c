@@ -4,6 +4,11 @@ FROM mcr.microsoft.com/devcontainers/base:trixie
 # https://apt.llvm.org/
 RUN bash -c "$(wget -O - https://apt.llvm.org/llvm.sh)"
 
+RUN apt-get update && \
+    apt-get install -y \
+    # Popular C library which provides commonly used data structures (dynamic string, dynamic array, hashmap, ...)
+    libglib2.0-dev
+
 # Use `zsh` as the default shell.
 RUN chsh -s $(which zsh) vscode
 
