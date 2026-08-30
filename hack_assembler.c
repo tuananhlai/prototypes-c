@@ -313,9 +313,8 @@ void c_instruction(String* comp, String* dest, String* jump, String* out) {
 }
 
 int main(void) {
-  const char* text = "   \n @10  \nD=0;JMP\n@2023 \n M=A \n 0;JEQ";
-  FILE* f = fmemopen((void*)text, strlen(text), "r");
-  FILE* out_f = fopen("tmp/out.asm", "a");
+  FILE* f = fopen("tmp/in.hack", "r");
+  FILE* out_f = fopen("tmp/out.asm", "w");
 
   Parser* p = parser_open(f);
   Code c = code_create();
@@ -335,11 +334,7 @@ int main(void) {
       parser_symbol(p, &symbol);
       a_instruction(&symbol, &a_ins);
       fputs(a_ins.data, out_f);
-      fputc('\n', out_f);
-      continue;
-    }
-
-    if (parser_instruction_type(p) == C_INSTRUCTION) {
+    } else if (parser_instruction_type(p) == C_INSTRUCTION) {
       parser_dest(p, &dest);
       code_dest(c, &dest, &dest_binary);
       parser_comp(p, &comp);
@@ -348,8 +343,10 @@ int main(void) {
       code_jump(c, &jump, &jump_binary);
       c_instruction(&comp_binary, &dest_binary, &jump_binary, &c_ins);
       fputs(c_ins.data, out_f);
+    }
+
+    if (parser_has_more_lines(p)) {
       fputc('\n', out_f);
-      continue;
     }
   }
 
