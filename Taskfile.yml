@@ -7,5 +7,5 @@ tasks:
     dir: '{{.USER_WORKING_DIR}}'
     desc: Compile and run a C file
     cmds:
-      - clang-22 -std=c23 -Wall -Wextra -Wpedantic -g3 -O0 -fsanitize=address,undefined -fno-omit-frame-pointer -Wformat=2 $(pkg-config --cflags --libs glib-2.0) {{.CLI_ARGS}} -o /tmp/a.out && /tmp/a.out
+      - clang-22 -std=c23 -Wall -Wextra -Wpedantic -g3 -O0 -fsanitize=address,undefined -fno-omit-frame-pointer -Wformat=2 {{.CLI_ARGS}} -o /tmp/a.out && /tmp/a.out
     silent: true

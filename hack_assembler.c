@@ -1,15 +1,11 @@
-#include <stddef.h>
 #define _GNU_SOURCE
+#include <stddef.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
 
-typedef struct {
-  char* data;
-  size_t len;
-  size_t cap;
-} String;
+#include "dynamic_string.h"
 
 typedef enum {
   A_INSTRUCTION,
@@ -23,15 +19,6 @@ typedef struct {
   String next_ins;
 } Parser;
 
-static void s_realloc_if_needed(String* s, size_t new_len);
-void s_set(String* s, const char* val, size_t len);
-String s_init(const char* val, size_t len);
-String s_new(void);
-void s_add(String* s, char ch);
-void s_concat(String* s, const char* val, size_t len);
-void s_trim(String* s);
-void s_destroy(String* s);
-
 int readline(FILE* fp, String* s);
 
 Parser* parser_open(FILE* f);
@@ -39,87 +26,17 @@ bool parser_has_more_lines(Parser* p);
 void parser_advance(Parser* p);
 InstructionType parser_instruction_type(Parser* p);
 int parser_symbol(Parser* p, String* s);
+int parser_dest(Parser* p, String* out);
+int parser_comp(Parser* p, String* out);
+int parser_jump(Parser* p, String* out);
 void parser_destroy(Parser* p);
-
-/** @brief Rellocate the given string s if necessary to accomodate a string with
- * the given length. */
-static void s_realloc_if_needed(String* s, size_t new_len) {
-  if (new_len + 1 <= s->cap) {
-    return;
-  }
-
-  s->cap = (new_len + 1) * 2;
-  s->data = realloc(s->data, s->cap * sizeof(char));
-}
-
-void s_set(String* s, const char* val, size_t len) {
-  s_realloc_if_needed(s, len);
-  memcpy(s->data, val, len);
-  s->data[len] = '\0';
-  s->len = len;
-}
-
-String s_init(const char* val, size_t len) {
-  String s = {.data = NULL, .len = 0, .cap = 0};
-  s_set(&s, val, len);
-  return s;
-}
-
-String s_new(void) { return s_init("", 0); }
-
-void s_copy(String* dest, String* src) { s_set(dest, src->data, src->len); }
-
-/** Append the given character to String s. */
-void s_add(String* s, char ch) {
-  size_t new_len = s->len + 1;
-  s_realloc_if_needed(s, new_len);
-  s->data[new_len - 1] = ch;
-  s->data[new_len] = '\0';
-  s->len = new_len;
-}
-
-void s_concat(String* s, const char* val, size_t len) {
-  size_t new_len = s->len + len;
-  s_realloc_if_needed(s, new_len);
-  memcpy(s->data + s->len, val, len);
-  s->data[new_len] = '\0';
-  s->len = new_len;
-}
-
-void s_trim(String* s) {
-  size_t start = 0;
-  size_t end = s->len;
-
-  while (start < s->len && s->data[start] == ' ') {
-    start++;
-  }
-  while (end > start && s->data[end - 1] == ' ') {
-    end--;
-  }
-
-  size_t new_len = end - start;
-  memmove(s->data, s->data + start, new_len);
-  s->data[new_len] = '\0';
-  s->len = new_len;
-}
-
-void s_clear(String* s) { s_set(s, "", 0); }
-
-void s_substr(String* s, size_t start, size_t end, String* sub_str) {
-  s_set(sub_str, s->data + start, end - start);
-}
-
-void s_destroy(String* s) {
-  free(s->data);
-  s->data = NULL;
-}
 
 /**
  * @brief Read a line from a file stream into a String.
  * @return EOF (-1) if we reached EOF and no data were read. 0 otherwise.
  */
 int readline(FILE* fp, String* s) {
-  s_set(s, "", 0);
+  s_clear(s);
 
   int ch;
   while (true) {
@@ -127,7 +44,7 @@ int readline(FILE* fp, String* s) {
     if (ch == '\n' || ch == EOF) {
       break;
     }
-    s_add(s, ch);
+    s_appendc(s, ch);
   }
 
   if (s->len == 0 && ch == EOF) return EOF;
@@ -187,7 +104,7 @@ int parser_symbol(Parser* p, String* s) {
 
   while (pos < p->cur_ins.len && p->cur_ins.data[pos] >= '0' &&
          p->cur_ins.data[pos] <= '9') {
-    s_add(s, p->cur_ins.data[pos]);
+    s_appendc(s, p->cur_ins.data[pos]);
     pos++;
   }
 
@@ -258,7 +175,7 @@ void parser_destroy(Parser* p) {
 }
 
 int main(void) {
-  const char* text = "   \n @10  \nD=0;JMP\n@2023 \n";
+  const char* text = "   \n @10  \nD=0;JMP\n@2023 \n M=A \n 0;JMP";
   FILE* f = fmemopen((void*)text, strlen(text), "r");
 
   Parser* p = parser_open(f);
