@@ -19,18 +19,23 @@ typedef struct {
   FILE* f;
   String cur_ins;
   String next_ins;
+
+  String symbol;
+  String dest;
+  String comp;
+  String jump;
 } Parser;
 
 int readline(FILE* fp, String* s);
 
-Parser* parser_open(FILE* f);
+Parser* parser_create(FILE* f);
 bool parser_has_more_lines(Parser* p);
 void parser_advance(Parser* p);
 InstructionType parser_instruction_type(Parser* p);
-int parser_symbol(Parser* p, String* s);
-int parser_dest(Parser* p, String* out);
-int parser_comp(Parser* p, String* out);
-int parser_jump(Parser* p, String* out);
+const char* parser_symbol(Parser* p);
+const char* parser_dest(Parser* p);
+const char* parser_comp(Parser* p);
+const char* parser_jump(Parser* p);
 void parser_destroy(Parser* p);
 
 /**
@@ -54,29 +59,37 @@ int readline(FILE* fp, String* s) {
   return 0;
 }
 
-Parser* parser_open(FILE* f) {
+Parser* parser_create(FILE* f) {
   Parser* p = malloc(sizeof(Parser));
   p->f = f;
   p->cur_ins = s_new();
   p->next_ins = s_new();
+  p->symbol = s_new();
+  p->dest = s_new();
+  p->comp = s_new();
+  p->jump = s_new();
   parser_advance(p);
   return p;
 }
 
 bool parser_has_more_lines(Parser* p) { return p->next_ins.len > 0; }
 
+/** Read the next instruction from input and make it the current instruction. */
 void parser_advance(Parser* p) {
   s_copy(&p->cur_ins, &p->next_ins);
 
+  bool is_empty;
+  bool is_comment;
   while (true) {
     int res = readline(p->f, &p->next_ins);
     if (res == EOF) {
       return;
     }
     s_trim(&p->next_ins);
-    if (p->next_ins.len != 0) {
-      break;
-    }
+    is_empty = p->next_ins.len == 0;
+    is_comment = p->next_ins.len >= 2 && p->next_ins.data[0] == '/' &&
+                 p->next_ins.data[1] == '/';
+    if (!is_empty && !is_comment) break;
   }
 }
 
@@ -91,34 +104,34 @@ InstructionType parser_instruction_type(Parser* p) {
   }
 }
 
-int parser_symbol(Parser* p, String* s) {
+const char* parser_symbol(Parser* p) {
   if (parser_instruction_type(p) != A_INSTRUCTION) {
-    return -1;
+    return NULL;
   }
 
-  s_clear(s);
+  s_clear(&p->symbol);
 
   size_t pos = 0;
   if (p->cur_ins.data[pos] != '@') {
-    return -1;
+    return NULL;
   }
   pos++;
 
   while (pos < p->cur_ins.len && p->cur_ins.data[pos] >= '0' &&
          p->cur_ins.data[pos] <= '9') {
-    s_appendc(s, p->cur_ins.data[pos]);
+    s_appendc(&p->symbol, p->cur_ins.data[pos]);
     pos++;
   }
 
-  return 0;
+  return p->symbol.data;
 }
 
-int parser_dest(Parser* p, String* out) {
+const char* parser_dest(Parser* p) {
   if (parser_instruction_type(p) != C_INSTRUCTION) {
-    return -1;
+    return NULL;
   }
 
-  s_clear(out);
+  s_clear(&p->dest);
 
   size_t pos = 0;
   while (pos < p->cur_ins.len && p->cur_ins.data[pos] != '=') {
@@ -127,19 +140,19 @@ int parser_dest(Parser* p, String* out) {
 
   // No equal sign was found.
   if (pos == p->cur_ins.len) {
-    return 0;
+    return p->dest.data;
   }
 
-  s_substr(&p->cur_ins, 0, pos, out);
-  return 0;
+  s_substr(&p->cur_ins, 0, pos, &p->dest);
+  return p->dest.data;
 }
 
-int parser_comp(Parser* p, String* out) {
+const char* parser_comp(Parser* p) {
   if (parser_instruction_type(p) != C_INSTRUCTION) {
-    return -1;
+    return NULL;
   }
 
-  s_clear(out);
+  s_clear(&p->comp);
 
   size_t start = 0;
   size_t end = 1;
@@ -150,29 +163,33 @@ int parser_comp(Parser* p, String* out) {
     end++;
   }
 
-  s_substr(&p->cur_ins, start, end, out);
-  return 0;
+  s_substr(&p->cur_ins, start, end, &p->comp);
+  return p->comp.data;
 }
 
-int parser_jump(Parser* p, String* out) {
+const char* parser_jump(Parser* p) {
   if (parser_instruction_type(p) != C_INSTRUCTION) {
-    return -1;
+    return NULL;
   }
 
-  s_clear(out);
+  s_clear(&p->jump);
 
   size_t start = 0;
   while (start < p->cur_ins.len && p->cur_ins.data[start] != ';') {
     start++;
   }
 
-  s_substr(&p->cur_ins, start + 1, p->cur_ins.len, out);
-  return 0;
+  s_substr(&p->cur_ins, start + 1, p->cur_ins.len, &p->jump);
+  return p->jump.data;
 }
 
 void parser_destroy(Parser* p) {
   s_destroy(&p->cur_ins);
   s_destroy(&p->next_ins);
+  s_destroy(&p->symbol);
+  s_destroy(&p->dest);
+  s_destroy(&p->comp);
+  s_destroy(&p->jump);
   free(p);
 }
 
@@ -260,11 +277,17 @@ Code code_create() {
   return c;
 }
 
-char* code_dest(Code c, char* mnemonic) { return shget(c.dest_mp, mnemonic); }
+char* code_dest(Code c, const char* mnemonic) {
+  return shget(c.dest_mp, mnemonic);
+}
 
-char* code_comp(Code c, char* mnemonic) { return shget(c.comp_mp, mnemonic); }
+char* code_comp(Code c, const char* mnemonic) {
+  return shget(c.comp_mp, mnemonic);
+}
 
-char* code_jump(Code c, char* mnemonic) { return shget(c.jump_mp, mnemonic); }
+char* code_jump(Code c, const char* mnemonic) {
+  return shget(c.jump_mp, mnemonic);
+}
 
 void code_destroy(Code* c) {
   shfree(c->dest_mp);
@@ -272,44 +295,28 @@ void code_destroy(Code* c) {
   shfree(c->jump_mp);
 }
 
-/** Write a 16-bit binary A instruction from the given symbol (i. "1234") to `out`. */
-void a_instruction(char* symbol, char out[17]) {
-  int memory_addr = atoi(symbol);
-  for (int i = 15; i >= 0; i--) {
-    out[i] = (memory_addr % 2) + '0';
-    memory_addr = memory_addr >> 1;
-  }
-  out[16] = '\0';
-}
-
-/** Write a 16-bit binary C instruction from the binary representation of comp, dest and jump to `out`. */
-void c_instruction(char* comp, char* dest, char* jump, char out[17]) {
-  snprintf(out, 17, "111%s%s%s", comp, dest, jump);
-}
-
 int main(void) {
   FILE* f = fopen("tmp/in.hack", "r");
   FILE* out_f = fopen("tmp/out.asm", "w");
 
-  Parser* p = parser_open(f);
+  Parser* p = parser_create(f);
   Code c = code_create();
 
-  String symbol = s_new();
-  String dest = s_new();
-  String comp = s_new();
-  String jump = s_new();
   char instruction[17];
   while (parser_has_more_lines(p)) {
     parser_advance(p);
     if (parser_instruction_type(p) == A_INSTRUCTION) {
-      parser_symbol(p, &symbol);
-      a_instruction(symbol.data, instruction);
+      int memory_addr = atoi(parser_symbol(p));
+      for (int i = 15; i > 0; i--) {
+        instruction[i] = (memory_addr % 2) + '0';
+        memory_addr = memory_addr >> 1;
+      }
+      instruction[0] = '0';
+      instruction[16] = '\0';
     } else if (parser_instruction_type(p) == C_INSTRUCTION) {
-      parser_dest(p, &dest);
-      parser_comp(p, &comp);
-      parser_jump(p, &jump);
-      c_instruction(code_comp(c, comp.data), code_dest(c, dest.data),
-                    code_jump(c, jump.data), instruction);
+      snprintf(instruction, sizeof instruction, "111%s%s%s",
+               code_comp(c, parser_comp(p)), code_dest(c, parser_dest(p)),
+               code_jump(c, parser_jump(p)));
     }
 
     fputs(instruction, out_f);
@@ -319,10 +326,6 @@ int main(void) {
   }
 
   // Clean up.
-  s_destroy(&jump);
-  s_destroy(&comp);
-  s_destroy(&dest);
-  s_destroy(&symbol);
   code_destroy(&c);
   parser_destroy(p);
   fclose(out_f);
