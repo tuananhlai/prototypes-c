@@ -316,6 +316,37 @@ void code_destroy(Code* c) {
   shfree(c->jump_mp);
 }
 
+typedef struct {
+  char* key;
+  uint16_t value;
+} Entry;
+
+typedef struct {
+  Entry* mp;
+} SymbolTable;
+
+SymbolTable st_create() { return (SymbolTable){.mp = NULL}; }
+
+void st_add_entry(SymbolTable* st, const char* symbol, uint16_t address) {
+  shput(st->mp, symbol, address);
+}
+
+bool st_contains(SymbolTable* st, const char* symbol) {
+  Entry* ent = shgetp_null(st->mp, symbol);
+  if (ent == NULL) {
+    return false;
+  }
+  return true;
+}
+
+int32_t st_get_address(SymbolTable* st, const char* symbol) {
+  Entry* ent = shgetp_null(st->mp, symbol);
+  if (ent == NULL) {
+    return -1;
+  }
+  return (int32_t) ent->value;
+}
+
 int main(void) {
   FILE* f = fopen("tmp/in.hack", "r");
   FILE* out_f = fopen("tmp/out.asm", "w");
