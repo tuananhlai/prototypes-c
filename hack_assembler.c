@@ -1,3 +1,4 @@
+#include <stdint.h>
 #define _GNU_SOURCE
 #include <stddef.h>
 #include <stdio.h>
@@ -37,6 +38,19 @@ const char* parser_dest(Parser* p);
 const char* parser_comp(Parser* p);
 const char* parser_jump(Parser* p);
 void parser_destroy(Parser* p);
+
+bool is_alphanumeric(char c) {
+  return (c >= '0' && c <= '9') || (c >= 'A' && c <= 'Z') ||
+         (c >= 'a' && c <= 'z');
+}
+
+/**
+ * A symbol can be any sequence of letters, digits, underscore (_), dot (.),
+ * dollar sign ($), and colon (:) that does not begin with a digit.
+ */
+bool is_symbol_char(char c) {
+  return is_alphanumeric(c) || c == '.' || c == '_' || c == '$' || c == ':';
+}
 
 /**
  * @brief Read a line from a file stream into a String.
@@ -105,25 +119,32 @@ InstructionType parser_instruction_type(Parser* p) {
 }
 
 const char* parser_symbol(Parser* p) {
-  if (parser_instruction_type(p) != A_INSTRUCTION) {
-    return NULL;
+  if (parser_instruction_type(p) == A_INSTRUCTION) {
+    s_clear(&p->symbol);
+
+    // TODO: properly parse the A instruction (@symbol).
+    size_t pos = 1;
+
+    while (pos < p->cur_ins.len && is_symbol_char(p->cur_ins.data[pos])) {
+      s_appendc(&p->symbol, p->cur_ins.data[pos]);
+      pos++;
+    }
+    return p->symbol.data;
   }
 
-  s_clear(&p->symbol);
+  if (parser_instruction_type(p) == L_INSTRUCTION) {
+    s_clear(&p->symbol);
 
-  size_t pos = 0;
-  if (p->cur_ins.data[pos] != '@') {
-    return NULL;
-  }
-  pos++;
-
-  while (pos < p->cur_ins.len && p->cur_ins.data[pos] >= '0' &&
-         p->cur_ins.data[pos] <= '9') {
-    s_appendc(&p->symbol, p->cur_ins.data[pos]);
-    pos++;
+    // TODO: properly parse the L instruction ((LABEL)).
+    size_t pos = 1;
+    while (pos < p->cur_ins.len && is_symbol_char(p->cur_ins.data[pos])) {
+      s_appendc(&p->symbol, p->cur_ins.data[pos]);
+      pos++;
+    }
+    return p->symbol.data;
   }
 
-  return p->symbol.data;
+  return NULL;
 }
 
 const char* parser_dest(Parser* p) {
