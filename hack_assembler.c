@@ -1,6 +1,6 @@
-#include <stdint.h>
-#define _GNU_SOURCE
+#include <ctype.h>
 #include <stddef.h>
+#include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -39,9 +39,13 @@ const char* parser_comp(Parser* p);
 const char* parser_jump(Parser* p);
 void parser_destroy(Parser* p);
 
-bool is_alphanumeric(char c) {
-  return (c >= '0' && c <= '9') || (c >= 'A' && c <= 'Z') ||
-         (c >= 'a' && c <= 'z');
+bool is_digit_string(const char* s, size_t n) {
+  for (size_t i = 0; i < n; i++) {
+    if (!isdigit(s[i])) {
+      return false;
+    }
+  }
+  return true;
 }
 
 /**
@@ -49,7 +53,7 @@ bool is_alphanumeric(char c) {
  * dollar sign ($), and colon (:) that does not begin with a digit.
  */
 bool is_symbol_char(char c) {
-  return is_alphanumeric(c) || c == '.' || c == '_' || c == '$' || c == ':';
+  return isalnum(c) || c == '.' || c == '_' || c == '$' || c == ':';
 }
 
 /**
@@ -74,6 +78,7 @@ int readline(FILE* fp, String* s) {
 }
 
 Parser* parser_create(FILE* f) {
+  // TODO: seek to beginning of f.
   Parser* p = malloc(sizeof(Parser));
   p->f = f;
   p->cur_ins = s_new();
@@ -87,6 +92,20 @@ Parser* parser_create(FILE* f) {
 }
 
 bool parser_has_more_lines(Parser* p) { return p->next_ins.len > 0; }
+
+int parser_reset(Parser* p) {
+  if (fseek(p->f, 0, SEEK_SET) != 0) {
+    perror("error seeking to beginning of file");
+    return -1;
+  }
+  s_clear(&p->cur_ins);
+  s_clear(&p->next_ins);
+  s_clear(&p->symbol);
+  s_clear(&p->dest);
+  s_clear(&p->comp);
+  s_clear(&p->jump);
+  return 0;
+}
 
 /** Read the next instruction from input and make it the current instruction. */
 void parser_advance(Parser* p) {
@@ -318,22 +337,49 @@ void code_destroy(Code* c) {
 
 typedef struct {
   char* key;
-  uint16_t value;
+  int32_t value;
 } Entry;
 
 typedef struct {
   Entry* mp;
 } SymbolTable;
 
-SymbolTable st_create() { return (SymbolTable){.mp = NULL}; }
+SymbolTable st_create() {
+  Entry* mp = NULL;
+  shput(mp, "R0", 0);
+  shput(mp, "R1", 1);
+  shput(mp, "R2", 2);
+  shput(mp, "R3", 3);
+  shput(mp, "R4", 4);
+  shput(mp, "R5", 5);
+  shput(mp, "R6", 6);
+  shput(mp, "R7", 7);
+  shput(mp, "R8", 8);
+  shput(mp, "R9", 9);
+  shput(mp, "R10", 10);
+  shput(mp, "R11", 11);
+  shput(mp, "R12", 12);
+  shput(mp, "R13", 13);
+  shput(mp, "R14", 14);
+  shput(mp, "R15", 15);
+  shput(mp, "SP", 0);
+  shput(mp, "LCL", 1);
+  shput(mp, "ARG", 2);
+  shput(mp, "THIS", 3);
+  shput(mp, "THAT", 4);
+  shput(mp, "SCREEN", 16384);
+  shput(mp, "KBD", 24576);
 
-void st_add_entry(SymbolTable* st, const char* symbol, uint16_t address) {
+  return (SymbolTable){.mp = NULL};
+}
+
+void st_add_entry(SymbolTable* st, const char* symbol, int32_t address) {
   shput(st->mp, symbol, address);
 }
 
 bool st_contains(SymbolTable* st, const char* symbol) {
-  Entry* ent = shgetp_null(st->mp, symbol);
-  if (ent == NULL) {
+  int index = shgeti(st->mp, symbol);
+  if (index == -1) {
     return false;
   }
   return true;
@@ -344,43 +390,107 @@ int32_t st_get_address(SymbolTable* st, const char* symbol) {
   if (ent == NULL) {
     return -1;
   }
-  return (int32_t) ent->value;
+  return (int32_t)ent->value;
 }
 
-int main(void) {
-  FILE* f = fopen("tmp/in.hack", "r");
-  FILE* out_f = fopen("tmp/out.asm", "w");
+void st_destroy(SymbolTable* st) { shfree(st->mp); }
 
-  Parser* p = parser_create(f);
-  Code c = code_create();
+typedef struct {
+  SymbolTable st;
+} Assembler;
 
+Assembler assembler_create() {
+  SymbolTable st = st_create();
+  return (Assembler){.st = st};
+}
+
+static int32_t assembler_resolve_symbol(Assembler* as, const char* symbol) {
+  if (is_digit_string(symbol, strlen(symbol))) {
+    // TODO: int automatically casted as int32_t
+    return atoi(symbol);
+  }
+  return st_get_address(&as->st, symbol);
+}
+
+int assembler_run(Assembler* as, FILE* out_f, FILE* in_f) {
+  int retval = -1;
+
+  Parser* parser = parser_create(in_f);
+  size_t line_num = 1;
+  InstructionType itype;
+  while (parser_has_more_lines(parser)) {
+    parser_advance(parser);
+    itype = parser_instruction_type(parser);
+    if (itype != L_INSTRUCTION) {
+      line_num++;
+      continue;
+    }
+
+    const char* symbol = parser_symbol(parser);
+    st_add_entry(&as->st, symbol, line_num + 1);
+  }
+
+  if (parser_reset(parser) != 0) {
+    perror("error resetting parser");
+    goto cleanup;
+  }
+
+  Code encoder = code_create();
   char instruction[17];
-  while (parser_has_more_lines(p)) {
-    parser_advance(p);
-    if (parser_instruction_type(p) == A_INSTRUCTION) {
-      int memory_addr = atoi(parser_symbol(p));
-      for (int i = 15; i > 0; i--) {
+
+  while (parser_has_more_lines(parser)) {
+    parser_advance(parser);
+    if (parser_instruction_type(parser) == A_INSTRUCTION) {
+      const char* symbol = parser_symbol(parser);
+      int32_t memory_addr = assembler_resolve_symbol(as, symbol);
+      if (memory_addr == -1) {
+        return -1;
+      }
+
+      for (size_t i = 15; i > 0; i--) {
         instruction[i] = (memory_addr % 2) + '0';
         memory_addr = memory_addr >> 1;
       }
       instruction[0] = '0';
       instruction[16] = '\0';
-    } else if (parser_instruction_type(p) == C_INSTRUCTION) {
+    } else if (parser_instruction_type(parser) == C_INSTRUCTION) {
       snprintf(instruction, sizeof instruction, "111%s%s%s",
-               code_comp(c, parser_comp(p)), code_dest(c, parser_dest(p)),
-               code_jump(c, parser_jump(p)));
+               code_comp(encoder, parser_comp(parser)),
+               code_dest(encoder, parser_dest(parser)),
+               code_jump(encoder, parser_jump(parser)));
     }
 
     fputs(instruction, out_f);
-    if (parser_has_more_lines(p)) {
+    if (parser_has_more_lines(parser)) {
       fputc('\n', out_f);
     }
   }
 
-  // Clean up.
-  code_destroy(&c);
-  parser_destroy(p);
+  retval = 0;
+cleanup:
+  code_destroy(&encoder);
+  parser_destroy(parser);
+  return retval;
+}
+
+void assembler_destroy(Assembler* as) { st_destroy(&as->st); }
+
+int main(void) {
+  int retval = EXIT_FAILURE;
+
+  FILE* f = fopen("tmp/in.asm", "r");
+  FILE* out_f = fopen("tmp/out.hack", "w");
+
+  Assembler as = assembler_create();
+  int result = assembler_run(&as, out_f, f);
+  if (result == -1) {
+    goto cleanup;
+  }
+
+  retval = EXIT_SUCCESS;
+cleanup:
+  assembler_destroy(&as);
   fclose(out_f);
   fclose(f);
-  return EXIT_SUCCESS;
+  return retval;
 }
