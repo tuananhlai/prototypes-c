@@ -104,6 +104,9 @@ int parser_reset(Parser* p) {
   s_clear(&p->dest);
   s_clear(&p->comp);
   s_clear(&p->jump);
+  // TODO: having to call parser_advance to ensure parser works correctly is a
+  // bit annoying.
+  parser_advance(p);
   return 0;
 }
 
@@ -244,6 +247,7 @@ typedef struct {
   StrMap* jump_mp;
 } Code;
 
+// TODO: using a map for translation might be too rigid.
 StrMap* dest_map_create() {
   StrMap* dest_mp = NULL;
   shput(dest_mp, "", "000");
@@ -346,6 +350,7 @@ typedef struct {
 
 SymbolTable st_create() {
   Entry* mp = NULL;
+  sh_new_strdup(mp);
   shput(mp, "R0", 0);
   shput(mp, "R1", 1);
   shput(mp, "R2", 2);
@@ -370,7 +375,7 @@ SymbolTable st_create() {
   shput(mp, "SCREEN", 16384);
   shput(mp, "KBD", 24576);
 
-  return (SymbolTable){.mp = NULL};
+  return (SymbolTable){.mp = mp};
 }
 
 void st_add_entry(SymbolTable* st, const char* symbol, int32_t address) {
@@ -386,28 +391,32 @@ bool st_contains(SymbolTable* st, const char* symbol) {
 }
 
 int32_t st_get_address(SymbolTable* st, const char* symbol) {
-  Entry* ent = shgetp_null(st->mp, symbol);
-  if (ent == NULL) {
+  if (!st_contains(st, symbol)) {
     return -1;
   }
-  return (int32_t)ent->value;
+  return shget(st->mp, symbol);
 }
 
 void st_destroy(SymbolTable* st) { shfree(st->mp); }
 
 typedef struct {
   SymbolTable st;
+  size_t next_var_addr;
 } Assembler;
 
 Assembler assembler_create() {
   SymbolTable st = st_create();
-  return (Assembler){.st = st};
+  return (Assembler){.st = st, .next_var_addr = 16};
 }
 
 static int32_t assembler_resolve_symbol(Assembler* as, const char* symbol) {
   if (is_digit_string(symbol, strlen(symbol))) {
     // TODO: int automatically casted as int32_t
     return atoi(symbol);
+  }
+  if (!st_contains(&as->st, symbol)) {
+    st_add_entry(&as->st, symbol, as->next_var_addr);
+    as->next_var_addr++;
   }
   return st_get_address(&as->st, symbol);
 }
@@ -416,7 +425,7 @@ int assembler_run(Assembler* as, FILE* out_f, FILE* in_f) {
   int retval = -1;
 
   Parser* parser = parser_create(in_f);
-  size_t line_num = 1;
+  size_t line_num = 0;
   InstructionType itype;
   while (parser_has_more_lines(parser)) {
     parser_advance(parser);
@@ -427,7 +436,7 @@ int assembler_run(Assembler* as, FILE* out_f, FILE* in_f) {
     }
 
     const char* symbol = parser_symbol(parser);
-    st_add_entry(&as->st, symbol, line_num + 1);
+    st_add_entry(&as->st, symbol, line_num);
   }
 
   if (parser_reset(parser) != 0) {
@@ -437,14 +446,19 @@ int assembler_run(Assembler* as, FILE* out_f, FILE* in_f) {
 
   Code encoder = code_create();
   char instruction[17];
-
   while (parser_has_more_lines(parser)) {
     parser_advance(parser);
-    if (parser_instruction_type(parser) == A_INSTRUCTION) {
+    itype = parser_instruction_type(parser);
+
+    if (itype == L_INSTRUCTION) {
+      continue;
+    }
+
+    if (itype == A_INSTRUCTION) {
       const char* symbol = parser_symbol(parser);
       int32_t memory_addr = assembler_resolve_symbol(as, symbol);
       if (memory_addr == -1) {
-        return -1;
+        goto cleanup;
       }
 
       for (size_t i = 15; i > 0; i--) {
@@ -453,7 +467,7 @@ int assembler_run(Assembler* as, FILE* out_f, FILE* in_f) {
       }
       instruction[0] = '0';
       instruction[16] = '\0';
-    } else if (parser_instruction_type(parser) == C_INSTRUCTION) {
+    } else if (itype == C_INSTRUCTION) {
       snprintf(instruction, sizeof instruction, "111%s%s%s",
                code_comp(encoder, parser_comp(parser)),
                code_dest(encoder, parser_dest(parser)),
