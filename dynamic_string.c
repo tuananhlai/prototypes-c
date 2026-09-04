@@ -1,5 +1,6 @@
 #include "dynamic_string.h"
 
+#include <stddef.h>
 #include <stdlib.h>
 #include <string.h>
 
@@ -31,10 +32,11 @@ void s_appendc(String* s, char ch) {
   s->len = new_len;
 }
 
-void s_append(String* s, const char* val, size_t len) {
-  size_t new_len = s->len + len;
+void s_append(String* s, const char* val) {
+  size_t val_len = strlen(val);
+  size_t new_len = s->len + val_len;
   s_realloc_if_needed(s, new_len);
-  memcpy(s->data + s->len, val, len);
+  memcpy(s->data + s->len, val, val_len);
   s->data[new_len] = '\0';
   s->len = new_len;
 }
@@ -68,6 +70,29 @@ void s_substr(String* s, size_t start, size_t end, String* sub_str) {
   }
 
   s_set(sub_str, s->data + start, end - start);
+}
+
+void s_trim_suffix(String* s, const char* suffix) {
+  size_t suffix_len = strlen(suffix);
+  if (s->len < suffix_len) {
+    return;
+  }
+
+  bool has_suffix = true;
+  size_t start = s->len - suffix_len;
+  for (size_t i = start; i < s->len; i++) {
+    if (s->data[i] != suffix[i - start]) {
+      has_suffix = false;
+      break;
+    }
+  }
+
+  if (!has_suffix) {
+    return;
+  }
+
+  s->len = s->len - suffix_len;
+  s->data[s->len] = '\0';
 }
 
 void s_destroy(String* s) {

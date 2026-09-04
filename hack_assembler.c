@@ -489,11 +489,20 @@ cleanup:
 
 void assembler_destroy(Assembler* as) { st_destroy(&as->st); }
 
-int main(void) {
-  int retval = EXIT_FAILURE;
+int main(int argc, char* argv[]) {
+  if (argc != 2) {
+    fprintf(stderr, "expect 1 argument, got %d\n", argc - 1);
+    return EXIT_FAILURE;
+  }
 
-  FILE* f = fopen("tmp/in.asm", "r");
-  FILE* out_f = fopen("tmp/out.hack", "w");
+  char* asm_file_path = argv[1];
+  String hack_file_path = s_init(argv[1], strlen(argv[1]));
+  s_trim_suffix(&hack_file_path, ".asm");
+  s_append(&hack_file_path, ".hack");
+
+  int retval = EXIT_FAILURE;
+  FILE* f = fopen(asm_file_path, "r");
+  FILE* out_f = fopen(hack_file_path.data, "w");
 
   Assembler as = assembler_create();
   int result = assembler_run(&as, out_f, f);
@@ -506,5 +515,6 @@ cleanup:
   assembler_destroy(&as);
   fclose(out_f);
   fclose(f);
+  s_destroy(&hack_file_path);
   return retval;
 }
