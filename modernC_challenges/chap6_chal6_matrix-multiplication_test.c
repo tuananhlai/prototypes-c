@@ -41,7 +41,7 @@ void test_matrix_inverse(void) {
       {-5, 2},
   };
   int32_t inversed_matrix[2][2];
-  matrix_inverse(2, 2, matrix, inversed_matrix);
+  matrix_inverse(2, matrix, inversed_matrix);
   for (size_t i = 0; i < 2; i++) {
     for (size_t j = 0; j < 2; j++) {
       TEST_CHECK_(inversed_matrix[i][j] == expected[i][j],

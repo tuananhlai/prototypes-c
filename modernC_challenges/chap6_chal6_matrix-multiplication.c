@@ -19,9 +19,10 @@ void matrix_vector_product(size_t m, size_t n, const int32_t matrix[m][n],
   }
 }
 
-void matrix_inverse(size_t m, size_t n, const int32_t matrix[m][n],
-                    int32_t out_matrix[n][m]) {
-  for (size_t i = 0; i < m; i++) {
+// TODO: find inversed matrix using Gaussian Elimination.
+void matrix_inverse(size_t n, const int32_t matrix[n][n],
+                    int32_t out_matrix[n][n]) {
+  for (size_t i = 0; i < n; i++) {
     for (size_t j = 0; j < n; j++) {
       out_matrix[i][j] = -matrix[i][j];
     }
