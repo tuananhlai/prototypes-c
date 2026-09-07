@@ -1,3 +1,5 @@
+#include <math.h>
+
 #include "../acutest.h"
 
 #define UNIT_TEST
@@ -31,22 +33,24 @@ void test_matrix_vector_product(void) {
   }
 }
 
+bool fequal(double a, double b) { return fabs(a - b) <= 1e-12; }
+
 void test_matrix_inverse(void) {
-  int32_t matrix[2][2] = {
+  double matrix[2][2] = {
       {2, 1},
       {5, 3},
   };
-  int32_t expected[2][2] = {
+  double expected[2][2] = {
       {3, -1},
       {-5, 2},
   };
-  int32_t inversed_matrix[2][2];
-  matrix_inverse(2, matrix, inversed_matrix);
+  double actual[2][2];
+  inverse_matrix(2, matrix, actual);
   for (size_t i = 0; i < 2; i++) {
     for (size_t j = 0; j < 2; j++) {
-      TEST_CHECK_(inversed_matrix[i][j] == expected[i][j],
-                  "inversed_matrix[%zu][%zu] == %d (got %d)", i, j,
-                  expected[i][j], inversed_matrix[i][j]);
+      TEST_CHECK_(fequal(actual[i][j], expected[i][j]),
+                  "inversed_matrix[%zu][%zu] == %f (got %f)", i, j,
+                  expected[i][j], actual[i][j]);
     }
   }
 }
