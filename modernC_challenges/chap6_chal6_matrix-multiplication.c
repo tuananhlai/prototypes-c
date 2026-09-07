@@ -3,6 +3,7 @@
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 #include <unistd.h>
 
 int32_t dot_product(const int32_t vec1[], const int32_t vec2[],
@@ -36,15 +37,13 @@ void swap_arr(double arr1[], double arr2[], size_t n) {
  */
 int gaussian_elimination(size_t n, const double a[n][n], const double b[n],
                          double out_x[n]) {
+  // each line in the matrix below looks like an equation
+  // in a system of equation.
+  // [a0, a1, a2, ..., an-1, b0]
   double m[n][n + 1];
   for (size_t i = 0; i < n; i++) {
-    for (size_t j = 0; j < n + 1; j++) {
-      if (j < n) {
-        m[i][j] = a[i][j];
-      } else {
-        m[i][j] = b[i];
-      }
-    }
+    memcpy(m[i], a[i], n * sizeof(double));
+    m[i][n] = b[i];
   }
 
   size_t max_row;
@@ -56,11 +55,11 @@ int gaussian_elimination(size_t n, const double a[n][n], const double b[n],
       }
     }
 
-    // why swap and check for zero at that particular position?
-    swap_arr(m[k], m[max_row], n + 1);
     if (m[k][k] == 0) {
       return -1;
     }
+    // why put the max row on top?
+    swap_arr(m[k], m[max_row], n + 1);
 
     double factor;
     for (size_t i = k + 1; i < n; i++) {
@@ -87,9 +86,7 @@ int inverse_matrix(size_t n, const double matrix[n][n],
   double x[n];
   double b[n];
   for (size_t col = 0; col < n; col++) {
-    for (size_t j = 0; j < n; j++) {
-      b[j] = 0;
-    }
+    memset(b, 0, n * sizeof(double));
     b[col] = 1;
 
     if (gaussian_elimination(n, matrix, b, x) != 0) {
