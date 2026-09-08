@@ -60,6 +60,7 @@ void uf_destroy(UnionFind* uf) {
   free(uf);
 }
 
+#ifndef UNIT_TEST
 int main() {
   UnionFind* uf = uf_create(10);
   printf("--- Initial State ---\n");
@@ -86,3 +87,4 @@ int main() {
   uf_destroy(uf);
   return 0;
 }
+#endif  // UNIT_TEST

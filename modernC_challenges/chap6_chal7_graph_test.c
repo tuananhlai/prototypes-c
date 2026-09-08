@@ -1,7 +1,8 @@
+#define UNIT_TEST
+
 #include "chap6_chal7_graph.c"
 
 #include "../acutest.h"
-#define UNIT_TEST
 
 void test_bfs_small(void) {
   bool adj_matrix[2][2] = {
@@ -49,6 +50,27 @@ void test_bfs_big(void) {
   TEST_CHECK_(actual == expected, "expect dist = %zd, got %zd", expected, actual);
 }
 
+void test_connected_components(void) {
+  // Two components: the path 0-1-2 and the pair 3-4.
+  const bool adj_matrix[5][5] = {
+      {false, true, false, false, false},
+      {true, false, true, false, false},
+      {false, true, false, false, false},
+      {false, false, false, false, true},
+      {false, false, false, true, false},
+  };
+  size_t cc[5];
+  connected_components(5, adj_matrix, cc);
+
+  TEST_CHECK_(cc[0] == cc[1], "expect cc[0] == cc[1], got %zu vs %zu", cc[0],
+              cc[1]);
+  TEST_CHECK_(cc[1] == cc[2], "expect cc[1] == cc[2], got %zu vs %zu", cc[1],
+              cc[2]);
+  TEST_CHECK_(cc[3] == cc[4], "expect cc[3] == cc[4], got %zu vs %zu", cc[3],
+              cc[4]);
+  TEST_CHECK_(cc[0] != cc[3], "expect cc[0] != cc[3], both are %zu", cc[0]);
+}
+
 void test_queue(void) {
   Queue q = queue_create();
   queue_enqueue(&q, (Entry){.node = 0});
@@ -80,6 +102,7 @@ TEST_LIST = {
     {"check bfs with the same start and end node", test_bfs_small_same_start_end},
     {"check bfs no path", test_bfs_small_nopath},
     {"check bfs big", test_bfs_big},
+    {"check connected components", test_connected_components},
     {"check queue", test_queue},
     {NULL, NULL},
 };

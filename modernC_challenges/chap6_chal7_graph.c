@@ -5,6 +5,10 @@
 #include <time.h>
 #include <unistd.h>
 
+#define STB_DS_IMPLEMENTATION
+#include "../stb_ds.h"
+#include "chap4_1_unionfind.c"
+
 typedef struct {
   size_t node;
   size_t dist;
@@ -44,6 +48,8 @@ int queue_dequeue(Queue* q, Entry* out_entry) {
   return 0;
 }
 
+void queue_clear(Queue* q) { q->len = 0; }
+
 size_t queue_size(Queue* q) { return q->len; }
 
 void queue_destroy(Queue* q) {
@@ -54,7 +60,7 @@ void queue_destroy(Queue* q) {
 }
 
 /**
- * Return the shortest 
+ * Return the distance of the shortest path between `start` and `end` node.
  */
 ssize_t bfs(size_t num_nodes, bool adj_matrix[num_nodes][num_nodes],
             size_t start, size_t end) {
@@ -77,7 +83,7 @@ ssize_t bfs(size_t num_nodes, bool adj_matrix[num_nodes][num_nodes],
       if (visited[next_node] || !adj_matrix[cur.node][next_node]) {
         continue;
       }
-      visited[cur.node] = true;
+      visited[next_node] = true;
       queue_enqueue(&q, (Entry){.node = next_node, .dist = cur.dist + 1});
     }
   }
@@ -85,4 +91,47 @@ ssize_t bfs(size_t num_nodes, bool adj_matrix[num_nodes][num_nodes],
 cleanup:
   queue_destroy(&q);
   return retval;
+}
+
+/**
+ * Returning a 1D array with length of `num_nodes`, where arr[i] == arr[j] if
+ * and only if node i and node js are connected.
+ */
+void connected_components(size_t num_nodes,
+                          const bool adj_matrix[num_nodes][num_nodes],
+                          size_t* out_cc) {
+  UnionFind* uf = uf_create(num_nodes);
+  bool visited[num_nodes];
+  memset(visited, 0, num_nodes * sizeof(bool));
+
+  size_t* queue = NULL;
+  size_t cur_node;
+  for (size_t node = 0; node < num_nodes; node++) {
+    if (visited[node]) {
+      continue;
+    }
+    visited[node] = true;
+    arrsetlen(queue, 0);
+    arrput(queue, node);
+
+    while (arrlenu(queue) > 0) {
+      cur_node = queue[0];
+      arrdel(queue, 0);
+      for (size_t next_node = 0; next_node < num_nodes; next_node++) {
+        if (visited[next_node] || !adj_matrix[cur_node][next_node]) {
+          continue;
+        }
+        visited[next_node] = true;
+        uf_union(uf, cur_node, next_node);
+        arrput(queue, next_node);
+      }
+    }
+  }
+
+  for (size_t node = 0; node < num_nodes; node++) {
+    out_cc[node] = uf_find(uf, node);
+  }
+
+  arrfree(queue);
+  uf_destroy(uf);
 }
