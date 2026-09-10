@@ -137,3 +137,44 @@ void connected_components(size_t num_nodes,
   arrfree(queue);
   uf_destroy(uf);
 }
+
+/**
+ * Return a spanning tree in adjacency matrix format of the given graph by
+ * writing to `out_spanning_tree`. 0 if success. Non-zero otherwise.
+ */
+int spanning_tree(size_t num_nodes, const bool adj_matrix[num_nodes][num_nodes],
+                  bool out_spanning_tree[num_nodes][num_nodes]) {
+  int retval = -1;
+  size_t* queue = NULL;
+  bool visited[num_nodes];
+  memset(visited, 0, num_nodes * sizeof(bool));
+  arrput(queue, 0);
+  visited[0] = true;
+
+  size_t cur;
+  while (arrlenu(queue) > 0) {
+    cur = queue[0];
+    arrdel(queue, 0);
+
+    for (size_t next_node = 0; next_node < num_nodes; next_node++) {
+      if (visited[next_node] || !adj_matrix[cur][next_node]) {
+        continue;
+      }
+      visited[next_node] = true;
+      out_spanning_tree[cur][next_node] = true;
+      out_spanning_tree[next_node][cur] = true;
+      arrput(queue, next_node);
+    }
+  }
+
+  for (size_t node = 0; node < num_nodes; node++) {
+    if (!visited[node]) {
+      goto cleanup;
+    }
+  }
+
+  retval = 0;
+cleanup:
+  arrfree(queue);
+  return retval;
+}
