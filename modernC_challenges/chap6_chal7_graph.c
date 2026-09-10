@@ -20,7 +20,11 @@ typedef struct {
   size_t cap;
 } Queue;
 
-Queue queue_create(void) { return (Queue){.items = NULL, .len = 0, .cap = 0}; }
+Queue* queue_create(void) {
+  Queue* q = malloc(sizeof(Queue));
+  *q = (Queue){.items = NULL, .len = 0, .cap = 0};
+  return q;
+}
 
 static void realloc_if_needed(Queue* q, size_t len) {
   if (len <= q->cap) {
@@ -54,9 +58,7 @@ size_t queue_size(Queue* q) { return q->len; }
 
 void queue_destroy(Queue* q) {
   free(q->items);
-  q->items = NULL;
-  q->len = 0;
-  q->cap = 0;
+  free(q);
 }
 
 /**
@@ -65,15 +67,15 @@ void queue_destroy(Queue* q) {
 ssize_t bfs(size_t num_nodes, bool adj_matrix[num_nodes][num_nodes],
             size_t start, size_t end) {
   ssize_t retval = -1;
-  Queue q = queue_create();
-  queue_enqueue(&q, (Entry){.node = start, .dist = 0});
+  Queue* q = queue_create();
+  queue_enqueue(q, (Entry){.node = start, .dist = 0});
 
   bool visited[num_nodes];
   memset(visited, 0, num_nodes * sizeof(bool));
   visited[start] = true;
   Entry cur;
-  while (queue_size(&q) > 0) {
-    queue_dequeue(&q, &cur);
+  while (queue_size(q) > 0) {
+    queue_dequeue(q, &cur);
     if (cur.node == end) {
       retval = cur.dist;
       goto cleanup;
@@ -84,12 +86,12 @@ ssize_t bfs(size_t num_nodes, bool adj_matrix[num_nodes][num_nodes],
         continue;
       }
       visited[next_node] = true;
-      queue_enqueue(&q, (Entry){.node = next_node, .dist = cur.dist + 1});
+      queue_enqueue(q, (Entry){.node = next_node, .dist = cur.dist + 1});
     }
   }
 
 cleanup:
-  queue_destroy(&q);
+  queue_destroy(q);
   return retval;
 }
 

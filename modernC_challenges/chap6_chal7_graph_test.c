@@ -72,29 +72,29 @@ void test_connected_components(void) {
 }
 
 void test_queue(void) {
-  Queue q = queue_create();
-  queue_enqueue(&q, (Entry){.node = 0});
-  queue_enqueue(&q, (Entry){.node = 1});
+  Queue* q = queue_create();
+  queue_enqueue(q, (Entry){.node = 0});
+  queue_enqueue(q, (Entry){.node = 1});
 
   size_t expected_size = 2;
-  size_t actual_size = queue_size(&q);
+  size_t actual_size = queue_size(q);
   TEST_ASSERT_(actual_size == expected_size, "expect queue_size = %zu, got %zu",
                expected_size, actual_size);
 
   int res;
   Entry elem;
-  res = queue_dequeue(&q, &elem);
+  res = queue_dequeue(q, &elem);
   TEST_ASSERT(res == 0);
   TEST_ASSERT(elem.node == 0);
 
-  res = queue_dequeue(&q, &elem);
+  res = queue_dequeue(q, &elem);
   TEST_ASSERT(res == 0);
   TEST_ASSERT(elem.node == 1);
 
-  res = queue_dequeue(&q, &elem);
+  res = queue_dequeue(q, &elem);
   TEST_ASSERT(res != 0);
 
-  queue_destroy(&q);
+  queue_destroy(q);
 }
 
 TEST_LIST = {
