@@ -191,7 +191,7 @@ typedef struct {
 Heap* heap_create() {
   Heap* h = malloc(sizeof(Heap));
   h->arr = NULL;
-  arrput(h->arr, (HeapEntry){});
+  arrsetlen(h->arr, 1);
   return h;
 }
 
@@ -224,23 +224,21 @@ static void heap_sink(Heap* h, size_t idx) {
     child_idx = idx * 2;
     if (child_idx + 1 < arrlenu(h->arr) &&
         h->arr[child_idx].key > h->arr[child_idx + 1].key) {
-      child_idx += 1;
+      child_idx++;
     }
     heap_swap(h, idx, child_idx);
     idx = child_idx;
   }
 }
 
-size_t heap_len(Heap* h) {
-  return arrlenu(h->arr) - 1;
-}
+size_t heap_len(Heap* h) { return arrlenu(h->arr) - 1; }
 
 void heap_push(Heap* h, HeapEntry e) {
   arrput(h->arr, e);
   heap_swim(h, arrlenu(h->arr) - 1);
 }
 
-HeapEntry heap_pop(Heap* h){
+HeapEntry heap_pop(Heap* h) {
   HeapEntry he = h->arr[1];
   heap_swap(h, 1, arrlenu(h->arr) - 1);
   arrpop(h->arr);
@@ -248,6 +246,47 @@ HeapEntry heap_pop(Heap* h){
   return he;
 }
 
-ssize_t
-    shortest_path(size_t num_nodes, ssize_t adj_matrix[num_nodes][num_nodes],
-                  size_t start, size_t end) {}
+typedef enum {
+  WHITE = 0,
+  GRAY = 1,
+  BLACK = 2,
+} NodeState;
+
+int shortest_path(size_t num_nodes, size_t adj_matrix[num_nodes][num_nodes],
+                  size_t start, size_t end, size_t* out_path_length) {
+  int retval = -1;
+  Heap* h = heap_create();
+  heap_push(h, (HeapEntry){
+                   .key = 0,
+                   .val = start,
+               });
+  HeapEntry cur;
+  NodeState state[num_nodes];
+  memset(state, 0, num_nodes * sizeof(int));
+
+  while (heap_len(h) > 0) {
+    cur = heap_pop(h);
+    if (state[cur.val] == BLACK) {
+      continue;
+    }
+    state[cur.val] = BLACK;
+    if (cur.val == end) {
+      retval = 0;
+      *out_path_length = cur.key;
+      goto cleanup;
+    }
+
+    for (size_t next_node = 0; next_node < num_nodes; next_node++) {
+      if (state[next_node] == BLACK || adj_matrix[cur.val][next_node] == 0) {
+        continue;
+      }
+      state[next_node] = GRAY;
+      heap_push(h, (HeapEntry){.key = cur.key + adj_matrix[cur.val][next_node],
+                               .val = next_node});
+    }
+  }
+
+cleanup:
+  heap_destroy(h);
+  return retval;
+}

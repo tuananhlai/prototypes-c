@@ -187,6 +187,53 @@ void test_heap_pop_ascending(void) {
   heap_destroy(h);
 }
 
+void test_shortest_path_small(void) {
+  size_t adj_matrix[2][2] = {
+      {0, 5},
+      {5, 0},
+  };
+  size_t path_length = 0;
+  int res = shortest_path(2, adj_matrix, 0, 1, &path_length);
+  TEST_CHECK_(res == 0, "expect shortest_path = 0, got %d", res);
+  TEST_CHECK_(path_length == 5, "expect path_length = 5, got %zu", path_length);
+}
+
+void test_shortest_path_nopath(void) {
+  size_t adj_matrix[2][2] = {
+      {0, 0},
+      {0, 0},
+  };
+  size_t path_length = 0;
+  int res = shortest_path(2, adj_matrix, 0, 1, &path_length);
+  TEST_CHECK_(res != 0, "expect shortest_path != 0, got %d", res);
+}
+
+void test_shortest_path_same_start_end(void) {
+  size_t adj_matrix[2][2] = {
+      {0, 0},
+      {0, 0},
+  };
+  size_t path_length = 99;
+  int res = shortest_path(2, adj_matrix, 0, 0, &path_length);
+  TEST_CHECK_(res == 0, "expect shortest_path = 0, got %d", res);
+  TEST_CHECK_(path_length == 0, "expect path_length = 0, got %zu", path_length);
+}
+
+void test_shortest_path_weighted(void) {
+  // Three routes from 0 to 3:
+  //   0-3     direct edge, weight 10
+  //   0-4-3   weight 2+2 = 4
+  //   0-1-2-3 weight 1+1+1 = 3 (cheapest, but most hops)
+  size_t adj_matrix[5][5] = {
+      {0, 1, 0, 10, 2}, {1, 0, 1, 0, 0}, {0, 1, 0, 1, 0},
+      {10, 0, 1, 0, 2}, {2, 0, 0, 2, 0},
+  };
+  size_t path_length = 0;
+  int res = shortest_path(5, adj_matrix, 0, 3, &path_length);
+  TEST_CHECK_(res == 0, "expect shortest_path = 0, got %d", res);
+  TEST_CHECK_(path_length == 3, "expect path_length = 3, got %zu", path_length);
+}
+
 TEST_LIST = {
     {"check bfs", test_bfs_small},
     {"check bfs with the same start and end node",
@@ -200,5 +247,10 @@ TEST_LIST = {
     {"check heap empty", test_heap_empty},
     {"check heap push len", test_heap_push_len},
     {"check heap pop ascending", test_heap_pop_ascending},
+    {"check shortest path", test_shortest_path_small},
+    {"check shortest path no path", test_shortest_path_nopath},
+    {"check shortest path same start and end",
+     test_shortest_path_same_start_end},
+    {"check shortest path weighted", test_shortest_path_weighted},
     {NULL, NULL},
 };
