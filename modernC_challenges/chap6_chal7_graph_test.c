@@ -144,6 +144,49 @@ void test_queue(void) {
   queue_destroy(q);
 }
 
+void test_heap_empty(void) {
+  Heap* h = heap_create();
+  size_t len = heap_len(h);
+  TEST_CHECK_(len == 0, "expect heap_len = 0, got %zu", len);
+  heap_destroy(h);
+}
+
+void test_heap_push_len(void) {
+  Heap* h = heap_create();
+  heap_push(h, (HeapEntry){.key = 5, .val = 0});
+  heap_push(h, (HeapEntry){.key = 3, .val = 1});
+  heap_push(h, (HeapEntry){.key = 8, .val = 2});
+
+  size_t len = heap_len(h);
+  TEST_CHECK_(len == 3, "expect heap_len = 3, got %zu", len);
+  heap_destroy(h);
+}
+
+void test_heap_pop_ascending(void) {
+  // Push keys out of order; pops must come back in ascending key order with
+  // each entry's val intact, and the heap must shrink by one per pop.
+  Heap* h = heap_create();
+  size_t keys[] = {7, 2, 9, 4, 1, 6};
+  size_t n = sizeof(keys) / sizeof(keys[0]);
+  for (size_t i = 0; i < n; i++) {
+    heap_push(h, (HeapEntry){.key = keys[i], .val = i});
+  }
+
+  size_t expected_keys[] = {1, 2, 4, 6, 7, 9};
+  size_t expected_vals[] = {4, 1, 3, 5, 0, 2};
+  for (size_t i = 0; i < n; i++) {
+    HeapEntry e = heap_pop(h);
+    TEST_CHECK_(e.key == expected_keys[i], "pop %zu: expect key = %zu, got %zu",
+                i, expected_keys[i], e.key);
+    TEST_CHECK_(e.val == expected_vals[i], "pop %zu: expect val = %zu, got %zu",
+                i, expected_vals[i], e.val);
+    size_t len = heap_len(h);
+    TEST_CHECK_(len == n - i - 1, "pop %zu: expect heap_len = %zu, got %zu", i,
+                n - i - 1, len);
+  }
+  heap_destroy(h);
+}
+
 TEST_LIST = {
     {"check bfs", test_bfs_small},
     {"check bfs with the same start and end node",
@@ -154,5 +197,8 @@ TEST_LIST = {
     {"check spanning tree exists", test_spanning_tree_exists},
     {"check spanning tree not exists", test_spanning_tree_not_exists},
     {"check queue", test_queue},
+    {"check heap empty", test_heap_empty},
+    {"check heap push len", test_heap_push_len},
+    {"check heap pop ascending", test_heap_pop_ascending},
     {NULL, NULL},
 };

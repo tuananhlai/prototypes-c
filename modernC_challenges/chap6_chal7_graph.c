@@ -178,3 +178,76 @@ cleanup:
   arrfree(queue);
   return retval;
 }
+
+typedef struct {
+  size_t key;
+  size_t val;
+} HeapEntry;
+
+typedef struct {
+  HeapEntry* arr;
+} Heap;
+
+Heap* heap_create() {
+  Heap* h = malloc(sizeof(Heap));
+  h->arr = NULL;
+  arrput(h->arr, (HeapEntry){});
+  return h;
+}
+
+void heap_destroy(Heap* h) {
+  arrfree(h->arr);
+  free(h);
+}
+
+static void heap_swap(Heap* h, size_t i, size_t j) {
+  HeapEntry tmp = h->arr[i];
+  h->arr[i] = h->arr[j];
+  h->arr[j] = tmp;
+}
+
+static void heap_swim(Heap* h, size_t idx) {
+  size_t parent_idx;
+  while (idx != 1) {
+    parent_idx = idx / 2;
+    if (h->arr[parent_idx].key <= h->arr[idx].key) {
+      break;
+    }
+    heap_swap(h, parent_idx, idx);
+    idx = parent_idx;
+  }
+}
+
+static void heap_sink(Heap* h, size_t idx) {
+  size_t child_idx;
+  while (idx * 2 < arrlenu(h->arr)) {
+    child_idx = idx * 2;
+    if (child_idx + 1 < arrlenu(h->arr) &&
+        h->arr[child_idx].key > h->arr[child_idx + 1].key) {
+      child_idx += 1;
+    }
+    heap_swap(h, idx, child_idx);
+    idx = child_idx;
+  }
+}
+
+size_t heap_len(Heap* h) {
+  return arrlenu(h->arr) - 1;
+}
+
+void heap_push(Heap* h, HeapEntry e) {
+  arrput(h->arr, e);
+  heap_swim(h, arrlenu(h->arr) - 1);
+}
+
+HeapEntry heap_pop(Heap* h){
+  HeapEntry he = h->arr[1];
+  heap_swap(h, 1, arrlenu(h->arr) - 1);
+  arrpop(h->arr);
+  heap_sink(h, 1);
+  return he;
+}
+
+ssize_t
+    shortest_path(size_t num_nodes, ssize_t adj_matrix[num_nodes][num_nodes],
+                  size_t start, size_t end) {}
