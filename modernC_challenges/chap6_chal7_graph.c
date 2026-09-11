@@ -15,18 +15,18 @@ typedef struct {
 } Entry;
 
 typedef struct {
-  Entry* items;
+  Entry *items;
   size_t len;
   size_t cap;
 } Queue;
 
-Queue* queue_create(void) {
-  Queue* q = malloc(sizeof(Queue));
+Queue *queue_create(void) {
+  Queue *q = malloc(sizeof(Queue));
   *q = (Queue){.items = NULL, .len = 0, .cap = 0};
   return q;
 }
 
-static void realloc_if_needed(Queue* q, size_t len) {
+static void realloc_if_needed(Queue *q, size_t len) {
   if (len <= q->cap) {
     return;
   }
@@ -35,13 +35,13 @@ static void realloc_if_needed(Queue* q, size_t len) {
   q->items = realloc(q->items, q->cap * sizeof(Entry));
 }
 
-void queue_enqueue(Queue* q, Entry e) {
+void queue_enqueue(Queue *q, Entry e) {
   realloc_if_needed(q, q->len + 1);
   q->items[q->len] = e;
   q->len++;
 }
 
-int queue_dequeue(Queue* q, Entry* out_entry) {
+int queue_dequeue(Queue *q, Entry *out_entry) {
   if (q->len == 0) {
     return -1;
   }
@@ -52,11 +52,11 @@ int queue_dequeue(Queue* q, Entry* out_entry) {
   return 0;
 }
 
-void queue_clear(Queue* q) { q->len = 0; }
+void queue_clear(Queue *q) { q->len = 0; }
 
-size_t queue_size(Queue* q) { return q->len; }
+size_t queue_size(Queue *q) { return q->len; }
 
-void queue_destroy(Queue* q) {
+void queue_destroy(Queue *q) {
   free(q->items);
   free(q);
 }
@@ -67,7 +67,7 @@ void queue_destroy(Queue* q) {
 ssize_t bfs(size_t num_nodes, bool adj_matrix[num_nodes][num_nodes],
             size_t start, size_t end) {
   ssize_t retval = -1;
-  Queue* q = queue_create();
+  Queue *q = queue_create();
   queue_enqueue(q, (Entry){.node = start, .dist = 0});
 
   bool visited[num_nodes];
@@ -101,12 +101,12 @@ cleanup:
  */
 void connected_components(size_t num_nodes,
                           const bool adj_matrix[num_nodes][num_nodes],
-                          size_t* out_cc) {
-  UnionFind* uf = uf_create(num_nodes);
+                          size_t *out_cc) {
+  UnionFind *uf = uf_create(num_nodes);
   bool visited[num_nodes];
   memset(visited, 0, num_nodes * sizeof(bool));
 
-  size_t* queue = NULL;
+  size_t *queue = NULL;
   size_t cur_node;
   for (size_t node = 0; node < num_nodes; node++) {
     if (visited[node]) {
@@ -145,7 +145,7 @@ void connected_components(size_t num_nodes,
 int spanning_tree(size_t num_nodes, const bool adj_matrix[num_nodes][num_nodes],
                   bool out_spanning_tree[num_nodes][num_nodes]) {
   int retval = -1;
-  size_t* queue = NULL;
+  size_t *queue = NULL;
   bool visited[num_nodes];
   memset(visited, 0, num_nodes * sizeof(bool));
   arrput(queue, 0);
@@ -185,28 +185,28 @@ typedef struct {
 } HeapEntry;
 
 typedef struct {
-  HeapEntry* arr;
+  HeapEntry *arr;
 } Heap;
 
-Heap* heap_create() {
-  Heap* h = malloc(sizeof(Heap));
+Heap *heap_create() {
+  Heap *h = malloc(sizeof(Heap));
   h->arr = NULL;
   arrsetlen(h->arr, 1);
   return h;
 }
 
-void heap_destroy(Heap* h) {
+void heap_destroy(Heap *h) {
   arrfree(h->arr);
   free(h);
 }
 
-static void heap_swap(Heap* h, size_t i, size_t j) {
+static void heap_swap(Heap *h, size_t i, size_t j) {
   HeapEntry tmp = h->arr[i];
   h->arr[i] = h->arr[j];
   h->arr[j] = tmp;
 }
 
-static void heap_swim(Heap* h, size_t idx) {
+static void heap_swim(Heap *h, size_t idx) {
   size_t parent_idx;
   while (idx != 1) {
     parent_idx = idx / 2;
@@ -218,7 +218,7 @@ static void heap_swim(Heap* h, size_t idx) {
   }
 }
 
-static void heap_sink(Heap* h, size_t idx) {
+static void heap_sink(Heap *h, size_t idx) {
   size_t min_child_idx;
   while (idx * 2 < arrlenu(h->arr)) {
     min_child_idx = idx * 2;
@@ -236,14 +236,14 @@ static void heap_sink(Heap* h, size_t idx) {
   }
 }
 
-size_t heap_len(Heap* h) { return arrlenu(h->arr) - 1; }
+size_t heap_len(Heap *h) { return arrlenu(h->arr) - 1; }
 
-void heap_push(Heap* h, HeapEntry e) {
+void heap_push(Heap *h, HeapEntry e) {
   arrput(h->arr, e);
   heap_swim(h, arrlenu(h->arr) - 1);
 }
 
-HeapEntry heap_pop(Heap* h) {
+HeapEntry heap_pop(Heap *h) {
   HeapEntry he = h->arr[1];
   heap_swap(h, 1, arrlenu(h->arr) - 1);
   arrpop(h->arr);
@@ -258,9 +258,9 @@ typedef enum {
 } NodeState;
 
 int shortest_path(size_t num_nodes, size_t adj_matrix[num_nodes][num_nodes],
-                  size_t start, size_t end, size_t* out_path_length) {
+                  size_t start, size_t end, size_t *out_path_length) {
   int retval = -1;
-  Heap* h = heap_create();
+  Heap *h = heap_create();
   heap_push(h, (HeapEntry){
                    .key = 0,
                    .val = start,
