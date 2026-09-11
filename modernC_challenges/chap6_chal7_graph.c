@@ -219,15 +219,20 @@ static void heap_swim(Heap* h, size_t idx) {
 }
 
 static void heap_sink(Heap* h, size_t idx) {
-  size_t child_idx;
+  size_t min_child_idx;
   while (idx * 2 < arrlenu(h->arr)) {
-    child_idx = idx * 2;
-    if (child_idx + 1 < arrlenu(h->arr) &&
-        h->arr[child_idx].key > h->arr[child_idx + 1].key) {
-      child_idx++;
+    min_child_idx = idx * 2;
+    if (min_child_idx + 1 < arrlenu(h->arr) &&
+        h->arr[min_child_idx].key > h->arr[min_child_idx + 1].key) {
+      min_child_idx++;
     }
-    heap_swap(h, idx, child_idx);
-    idx = child_idx;
+
+    if (h->arr[idx].key <= h->arr[min_child_idx].key) {
+      break;
+    }
+
+    heap_swap(h, idx, min_child_idx);
+    idx = min_child_idx;
   }
 }
 
