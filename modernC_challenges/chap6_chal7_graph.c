@@ -257,6 +257,9 @@ typedef enum {
   BLACK = 2,
 } NodeState;
 
+/**
+ * Return the total weight of the shortest path from start to end.
+ */
 int shortest_path(size_t num_nodes, size_t adj_matrix[num_nodes][num_nodes],
                   size_t start, size_t end, size_t *out_path_length) {
   int retval = -1;
