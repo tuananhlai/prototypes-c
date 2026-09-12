@@ -1,8 +1,8 @@
 
-#include "acutest.h"
+#include "../acutest.h"
 
 #define UNIT_TEST
-#include "strcmpbc.c"
+#include "chap6_ex4_strcmpbc.c"
 
 typedef enum {
   NEG,
