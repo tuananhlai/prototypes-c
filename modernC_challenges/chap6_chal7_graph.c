@@ -7,7 +7,7 @@
 
 #define STB_DS_IMPLEMENTATION
 #include "../stb_ds.h"
-#include "chap4_1_unionfind.c"
+#include "chap4_exs1_unionfind.c"
 
 typedef struct {
   size_t node;

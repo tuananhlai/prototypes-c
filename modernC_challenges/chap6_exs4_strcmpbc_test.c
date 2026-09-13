@@ -2,7 +2,7 @@
 #include "../acutest.h"
 
 #define UNIT_TEST
-#include "chap6_ex4_strcmpbc.c"
+#include "chap6_exs4_strcmpbc.c"
 
 typedef enum {
   NEG,
