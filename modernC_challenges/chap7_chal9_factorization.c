@@ -1,27 +1,36 @@
+#include <math.h>
 #include <stddef.h>
 #include <stdio.h>
 #include <stdlib.h>
-#define STB_DS_IMPLEMENTATION
-#include "../stb_ds.h"
 
-void factorize(size_t n, size_t *factors) {
-  arrpush(factors, 10);
-  // for (size_t i = 2; n > 1; i++) {
-  //   if (n % i != 0)
-  //     continue;
-  //   arrpush(factors, i);
-  //   while (n % i == 0) n /= i;
-  // }
+size_t smallest_prime_factor(size_t n) {
+  for (size_t i = 2; i <= sqrt(n); i++) {
+    if (n % i == 0) {
+      return i;
+    }
+  }
+
+  return n;
 }
 
-int main(void) { 
-  size_t n = 500;
-  size_t* factors = NULL;
-  factorize(n, factors);
-  printf("%zu: ", n);
-  for (size_t i = 0; i < arrlenu(factors); i++) {
-    printf(" %zu", factors[i]);
+int main(int argc, char *argv[]) {
+  if (argc < 2) {
+    exit(EXIT_FAILURE);
   }
-  arrfree(factors);
-  return EXIT_SUCCESS; 
+  size_t n;
+  size_t factor;
+
+  for (int i = 1; i < argc; i++) {
+    n = atoi(argv[i]);
+    printf("%zu:", n);
+    while (n > 1) {
+      factor = smallest_prime_factor(n);
+      printf(" %zu", factor);
+      while (n % factor == 0)
+        n /= factor;
+    }
+    putchar('\n');
+  }
+
+  return EXIT_SUCCESS;
 }
