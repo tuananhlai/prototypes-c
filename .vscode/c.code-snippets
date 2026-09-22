@@ -1,0 +1,16 @@
+{
+  "Unit Test": {
+    "prefix": "ut",
+    "description": "Acutest unit test file with table-driven cases",
+    "body": [
+      "#include \"../acutest.h\"",
+      "",
+      "#define UNIT_TEST",
+			"",
+      "TEST_LIST = {",
+      "    {NULL, NULL},",
+      "};",
+      ""
+    ]
+  }
+}
