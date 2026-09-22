@@ -6,9 +6,9 @@
 #include <string.h>
 #include <unistd.h>
 
-#include "dynamic_string.h"
+#include "../dynamic_string.h"
 #define STB_DS_IMPLEMENTATION
-#include "stb_ds.h"
+#include "../stb_ds.h"
 
 typedef enum {
   A_INSTRUCTION,
@@ -253,11 +253,11 @@ StrMap* dest_map_create() {
   shput(dest_mp, "", "000");
   shput(dest_mp, "M", "001");
   shput(dest_mp, "D", "010");
-  shput(dest_mp, "DM", "011");
+  shput(dest_mp, "MD", "011");
   shput(dest_mp, "A", "100");
   shput(dest_mp, "AM", "101");
   shput(dest_mp, "AD", "110");
-  shput(dest_mp, "ADM", "111");
+  shput(dest_mp, "AMD", "111");
   return dest_mp;
 }
 
