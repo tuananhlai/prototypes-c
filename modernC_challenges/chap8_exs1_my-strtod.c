@@ -4,10 +4,16 @@
 #include <stdio.h>
 #include <stdlib.h>
 
+// TODO: support more formats.
+// TODO: convert directly to binary float.
+/**
+Write a function my_strtod that implements the functionality of strtod for
+decimal floating-point constants.
+*/
 double my_strtod(const char *nptr, const char **endptr) {
   double sign = 1;
   double int_part = 0;
-  double fractional_part = 0;
+  double fractional_part_num = 0;
   double retval;
   size_t consumed = 0;
 
@@ -44,14 +50,15 @@ double my_strtod(const char *nptr, const char **endptr) {
     goto cleanup;
   }
 
-  size_t x = 1;
+  size_t fractional_part_deno = 1;
   while (isdigit(nptr[cur])) {
-    fractional_part = fractional_part * 10 + (nptr[cur] - '0');
-    x *= 10;
+    fractional_part_num = fractional_part_num * 10 + (nptr[cur] - '0');
+    fractional_part_deno *= 10;
     cur++;
     consumed = cur;
   }
-  retval = sign * (int_part + (double)fractional_part / x);
+  retval =
+      sign * (int_part + (double)fractional_part_num / fractional_part_deno);
 
 cleanup:
   if (endptr != NULL) {
