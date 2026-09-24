@@ -20,10 +20,10 @@ that have more than 31 characters. Why?
 command-line argument is "-n".
 */
 int main(int argc, char *argv[argc + 1]) {
-  int ret = EXIT_FAILURE;
   char buffer[buf_max] = {};
 
   bool display_line_num = false;
+  bool has_file_arg = false;
   size_t max_instreams_len = argc > 1 ? argc - 1 : 1;
   // Allocate the maximum number of elements on the stack and use
   // a separate variable to track the length of the array.
@@ -36,17 +36,19 @@ int main(int argc, char *argv[argc + 1]) {
     }
 
     FILE *instream = fopen(argv[i], "r");
+    has_file_arg = true;
     if (!instream) {
-      fprintf(stderr, "could not open %s:", argv[i]);
+      fprintf(stderr, "could not open %s: ", argv[i]);
       perror(0);
       errno = 0;
+      continue;
     }
     instreams[instreams_len] = instream;
     instreams_len++;
   }
-  if (instreams_len == 0) {
-    instreams[0] = stdin;
-    instreams_len = 1;
+  if (!has_file_arg) {
+    instreams[instreams_len] = stdin;
+    instreams_len++;
   }
 
   size_t line_num = 1;
@@ -63,9 +65,9 @@ int main(int argc, char *argv[argc + 1]) {
       prev_buffer_eol =
           strlen(buffer) > 0 && buffer[strlen(buffer) - 1] == '\n';
     }
-    fclose(instreams[i]);
-    ret = EXIT_SUCCESS;
+    if (instreams[i] != stdin)
+      fclose(instreams[i]);
   }
 
-  return ret;
+  return EXIT_SUCCESS;
 }
