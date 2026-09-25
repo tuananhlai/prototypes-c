@@ -7,4 +7,8 @@ CompileFlags:
     - "-Wextra"
     - "-Wpedantic"
     - "-Wformat=2"
+    - "-I/usr/include/ImageMagick-7"
+    - "-DMAGICKCORE_HDRI_ENABLE=0"
+    - "-DMAGICKCORE_QUANTUM_DEPTH=16"
+    - "-DMAGICKCORE_CHANNEL_MASK_DEPTH=32"
 
