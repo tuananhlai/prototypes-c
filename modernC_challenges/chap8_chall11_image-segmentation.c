@@ -1,5 +1,6 @@
 #include "chap4_exs1_unionfind.c"
 #include <assert.h>
+#include <math.h>
 #include <stddef.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -7,57 +8,57 @@
 #define STB_DS_IMPLEMENTATION
 #include "../stb_ds.h"
 
+typedef struct {
+  size_t count;
+  size_t sum;
+} RegionStats;
+
+double region_mean(RegionStats stat) { return (double)stat.sum / stat.count; }
+
+RegionStats region_merge(RegionStats dest, RegionStats src) {
+  return (RegionStats){.count = dest.count + src.count,
+                       .sum = dest.sum + src.sum};
+}
+
+size_t to_1d_index(size_t w, size_t i, size_t j) { return i * w + j; }
+
 void regions(size_t h, size_t w, const unsigned char img[h][w],
-             UnionFind *out_uf) {
+             UnionFind *out_uf, RegionStats *out_stats) {
   assert(out_uf->parent_len >= h * w);
 
-  typedef struct {
-    size_t i;
-    size_t j;
-  } Entry;
-  Entry *queue = nullptr;
-  bool visited[h][w];
-  memset(visited, 0, sizeof(visited));
   for (size_t i = 0; i < h; i++) {
-    arrsetlen(queue, 0);
     for (size_t j = 0; j < w; j++) {
-      if (visited[i][j])
-        continue;
+      size_t idx = to_1d_index(w, i, j);
+      out_stats[idx].count = 1;
+      out_stats[idx].sum = img[i][j];
+    }
+  }
 
-      arrput(queue, ((Entry){i, j}));
-      while (arrlenu(queue) > 0) {
-        Entry cur = queue[0];
-        arrdel(queue, 0);
-
-        if (cur.i < h - 1 && !visited[cur.i + 1][cur.j] &&
-            img[cur.i][cur.j] == img[cur.i + 1][cur.j]) {
-          arrput(queue, ((Entry){cur.i + 1, cur.j}));
-          visited[cur.i + 1][cur.j] = true;
-          uf_union(out_uf, cur.i * w + cur.j, (cur.i + 1) * w + cur.j);
+  RegionStats top_stat, cur_stat, right_stat;
+  size_t cur_idx, top_idx, right_idx, region_root_idx;
+  for (size_t i = 0; i < h; i++) {
+    for (size_t j = 0; j < w; j++) {
+      cur_idx = to_1d_index(w, i, j);
+      cur_stat = out_stats[cur_idx];
+      if (i > 0) {
+        top_idx = to_1d_index(w, i - 1, j);
+        top_stat = out_stats[top_idx];
+        if (fabs(region_mean(cur_stat) - region_mean(top_stat)) <= 5) {
+          region_root_idx = uf_union(out_uf, cur_idx, top_idx);
+          // FIXME: merge stats of the region root.
+          out_stats[region_root_idx] = region_merge(cur_stat, top_stat);
         }
-        if (cur.i > 0 && !visited[cur.i - 1][cur.j] &&
-            img[cur.i][cur.j] == img[cur.i - 1][cur.j]) {
-          arrput(queue, ((Entry){cur.i - 1, cur.j}));
-          visited[cur.i - 1][cur.j] = true;
-          uf_union(out_uf, cur.i * w + cur.j, (cur.i - 1) * w + cur.j);
-        }
-        if (cur.j < w - 1 && !visited[cur.i][cur.j + 1] &&
-            img[cur.i][cur.j] == img[cur.i][cur.j + 1]) {
-          arrput(queue, ((Entry){cur.i, cur.j + 1}));
-          visited[cur.i][cur.j + 1] = true;
-          uf_union(out_uf, cur.i * w + cur.j, cur.i * w + cur.j + 1);
-        }
-        if (cur.j > 0 && !visited[cur.i][cur.j - 1] &&
-            img[cur.i][cur.j] == img[cur.i][cur.j - 1]) {
-          arrput(queue, ((Entry){cur.i, cur.j - 1}));
-          visited[cur.i][cur.j - 1] = true;
-          uf_union(out_uf, cur.i * w + cur.j, cur.i * w + cur.j - 1);
+      }
+      if (j < w - 1) {
+        right_idx = to_1d_index(w, i, j + 1);
+        right_stat = out_stats[right_idx];
+        if (fabs(region_mean(cur_stat) - region_mean(right_stat)) <= 5) {
+          region_root_idx = uf_union(out_uf, cur_idx, right_idx);
+          out_stats[region_root_idx] = region_merge(cur_stat, right_stat);
         }
       }
     }
   }
-
-  arrfree(queue);
 }
 
 /**
@@ -96,32 +97,26 @@ mean distance instead of five.
 */
 // clang-22 chap8_chall11_image-segmentation.c $(pkg-config --cflags --libs
 // MagickWand) -fopenmp=libgomp
-int main(int argc, char *argv[]) {
-  size_t h = 16, w = 16;
-  unsigned char img[16][16] = {
-      {21, 22, 21, 21, 22, 22, 19, 19, 22, 21, 22, 19, 18, 21, 20, 19},
-      {18, 22, 18, 22, 21, 21, 22, 19, 22, 18, 22, 18, 18, 18, 19, 19},
-      {22, 18, 101, 100, 101, 102, 99, 102, 19, 20, 21, 18, 18, 21, 20, 21},
-      {22, 18, 100, 100, 99, 102, 100, 98, 18, 22, 18, 21, 18, 20, 21, 18},
-      {18, 18, 99, 99, 98, 101, 101, 101, 21, 18, 22, 19, 20, 20, 18, 20},
-      {20, 18, 101, 98, 99, 99, 98, 98, 18, 21, 21, 19, 22, 19, 21, 22},
-      {19, 19, 101, 101, 98, 101, 101, 99, 18, 20, 22, 20, 18, 19, 19, 21},
-      {22, 22, 98, 98, 99, 99, 101, 100, 18, 22, 20, 20, 21, 18, 18, 18},
-      {19, 22, 19, 18, 22, 20, 20, 22, 21, 19, 202, 201, 202, 19, 21, 19},
-      {19, 20, 19, 22, 19, 19, 19, 22, 19, 201, 201, 202, 198, 201, 18, 18},
-      {18, 18, 22, 20, 19, 21, 20, 21, 202, 201, 200, 202, 199, 198, 199, 19},
-      {21, 22, 22, 22, 18, 20, 19, 19, 198, 198, 200, 201, 201, 199, 198, 18},
-      {149, 150, 150, 152, 152, 149, 18, 20, 199, 201, 200, 202, 202, 199, 202,
-       18},
-      {148, 151, 150, 150, 148, 148, 22, 18, 21, 198, 200, 200, 199, 198, 18,
-       21},
-      {152, 150, 148, 149, 150, 150, 18, 21, 18, 21, 198, 201, 202, 18, 22, 21},
-      {151, 152, 148, 152, 148, 148, 18, 18, 20, 21, 20, 21, 22, 21, 21, 21},
+int main(void) {
+  size_t h = 5, w = 5;
+  unsigned char img[5][5] = {
+      {20, 20, 20, 20, 20},
+      {20, 100, 100, 20, 20},
+      {20, 100, 100, 20, 20},
+      {20, 20, 20, 200, 200},
+      {20, 20, 20, 200, 200},
   };
 
-  auto uf = uf_create(h * w);
-  regions(h, w, img, uf);
-  printf("%d %d\n", uf_connected(uf, 0, 1), uf_connected(uf, 2, 3));
+  size_t n = h * w;
+  RegionStats stats[n];
+  auto uf = uf_create(n);
+
+  regions(h, w, img, uf, stats);
+  for (size_t i = 0; i < n; i++) {
+    size_t root = uf_find(uf, i);
+    printf("i = %zu, root = %zu, count = %zu, sum = %zu\n", i, root, stats[root].count, stats[root].sum);
+  }
+
 
   uf_destroy(uf);
   return EXIT_SUCCESS;

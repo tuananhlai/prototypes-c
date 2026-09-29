@@ -2,12 +2,12 @@
 #include <stdlib.h>
 
 typedef struct {
-  size_t* parent;
+  size_t *parent;
   size_t parent_len;
 } UnionFind;
 
-UnionFind* uf_create(size_t n) {
-  UnionFind* uf = malloc(sizeof(UnionFind));
+UnionFind *uf_create(size_t n) {
+  UnionFind *uf = malloc(sizeof(UnionFind));
   uf->parent = malloc(n * sizeof(size_t));
   uf->parent_len = n;
 
@@ -17,27 +17,27 @@ UnionFind* uf_create(size_t n) {
   return uf;
 }
 
-size_t uf_find(UnionFind* uf, size_t v) {
+size_t uf_find(UnionFind *uf, size_t v) {
   while (v != uf->parent[v]) {
     v = uf->parent[v];
   }
   return v;
 }
 
-void uf_find_replace(UnionFind* uf, size_t v, size_t new_root) {
+size_t uf_find_replace(UnionFind *uf, size_t v, size_t new_root) {
   size_t next_parent;
   while (true) {
     next_parent = uf->parent[v];
     uf->parent[v] = new_root;
 
     if (v == next_parent) {
-      break;
+      return v;
     }
     v = next_parent;
   }
 }
 
-size_t uf_find_compress(UnionFind* uf, size_t v) {
+size_t uf_find_compress(UnionFind *uf, size_t v) {
   if (v == uf->parent[v]) {
     return v;
   }
@@ -46,16 +46,16 @@ size_t uf_find_compress(UnionFind* uf, size_t v) {
   return root;
 }
 
-void uf_union(UnionFind* uf, size_t a, size_t b) {
+size_t uf_union(UnionFind *uf, size_t a, size_t b) {
   size_t root_a = uf_find_compress(uf, a);
-  uf_find_replace(uf, b, root_a);
+  return uf_find_replace(uf, b, root_a);
 }
 
-bool uf_connected(UnionFind* uf, size_t a, size_t b) {
+bool uf_connected(UnionFind *uf, size_t a, size_t b) {
   return uf_find_compress(uf, a) == uf_find_compress(uf, b);
 }
 
-void uf_destroy(UnionFind* uf) {
+void uf_destroy(UnionFind *uf) {
   free(uf->parent);
   free(uf);
 }
