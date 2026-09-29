@@ -1,43 +1,103 @@
+#include "chap4_exs1_unionfind.c"
+#include <assert.h>
+#include <stddef.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
+#define STB_DS_IMPLEMENTATION
+#include "../stb_ds.h"
+
+void regions(size_t h, size_t w, const unsigned char img[h][w],
+             UnionFind *out_uf) {
+  assert(out_uf->parent_len >= h * w);
+
+  typedef struct {
+    size_t i;
+    size_t j;
+  } Entry;
+  Entry *queue = nullptr;
+  bool visited[h][w];
+  memset(visited, 0, sizeof(visited));
+  for (size_t i = 0; i < h; i++) {
+    arrsetlen(queue, 0);
+    for (size_t j = 0; j < w; j++) {
+      if (visited[i][j])
+        continue;
+
+      arrput(queue, ((Entry){i, j}));
+      while (arrlenu(queue) > 0) {
+        Entry cur = queue[0];
+        arrdel(queue, 0);
+
+        if (cur.i < h - 1 && !visited[cur.i + 1][cur.j] &&
+            img[cur.i][cur.j] == img[cur.i + 1][cur.j]) {
+          arrput(queue, ((Entry){cur.i + 1, cur.j}));
+          visited[cur.i + 1][cur.j] = true;
+          uf_union(out_uf, cur.i * w + cur.j, (cur.i + 1) * w + cur.j);
+        }
+        if (cur.i > 0 && !visited[cur.i - 1][cur.j] &&
+            img[cur.i][cur.j] == img[cur.i - 1][cur.j]) {
+          arrput(queue, ((Entry){cur.i - 1, cur.j}));
+          visited[cur.i - 1][cur.j] = true;
+          uf_union(out_uf, cur.i * w + cur.j, (cur.i - 1) * w + cur.j);
+        }
+        if (cur.j < w - 1 && !visited[cur.i][cur.j + 1] &&
+            img[cur.i][cur.j] == img[cur.i][cur.j + 1]) {
+          arrput(queue, ((Entry){cur.i, cur.j + 1}));
+          visited[cur.i][cur.j + 1] = true;
+          uf_union(out_uf, cur.i * w + cur.j, cur.i * w + cur.j + 1);
+        }
+        if (cur.j > 0 && !visited[cur.i][cur.j - 1] &&
+            img[cur.i][cur.j] == img[cur.i][cur.j - 1]) {
+          arrput(queue, ((Entry){cur.i, cur.j - 1}));
+          visited[cur.i][cur.j - 1] = true;
+          uf_union(out_uf, cur.i * w + cur.j, cur.i * w + cur.j - 1);
+        }
+      }
+    }
+  }
+
+  arrfree(queue);
+}
 
 /**
-Challenge 11 (Image segmentation). In addition to the C standard library, there
-are many other support libraries out there that provide very different features.
-Among those are a lot that do image processing of some kind.
+Challenge 11 (Image segmentation). In addition to the C standard library,
+there are many other support libraries out there that provide very different
+features. Among those are a lot that do image processing of some kind.
 
 Try to find a
-suitable such image-processing library that is written in or interfaced to C and
-that allows you to treat grayscale images as two-dimensional matrices of base
-type unsigned char.
+suitable such image-processing library that is written in or interfaced to C
+and that allows you to treat grayscale images as two-dimensional matrices of
+base type unsigned char.
 
 The goal of this challenge is to perform a segmentation of
-such an image: to group the pixels (the unsigned char elements of the matrix)
-into connected regions that are “similar” in some sense or another. Such a
-segmentation forms a partition of the set of pixels, much as we saw in
-challenge 4. Therefore, you should use a Union-Find structure to represent
-regions, one per pixel at the start.
+such an image: to group the pixels (the unsigned char elements of the
+matrix) into connected regions that are “similar” in some sense or another.
+Such a segmentation forms a partition of the set of pixels, much as we saw
+in challenge 4. Therefore, you should use a Union-Find structure to
+represent regions, one per pixel at the start.
 
 Can you implement a statistics function that computes a statistic for all
 regions? This should be another array (the third array in the game) that for
 each root holds the number of pixels and the sum of all values.
 
-Can you implement a merge criterion for regions? Test whether the mean values of
-two regions are not too far apart: say, no more than five gray values.
+Can you implement a merge criterion for regions? Test whether the mean
+values of two regions are not too far apart: say, no more than five gray
+values.
 
-Can you implement a line-by-line merge strategy that, for each pixel on a line
-of the image, tests whether its region should be merged to the left and/or to
-the top? Can you iterate line by line until there are no more changes: that is,
-such that the resulting regions/sets all test negatively with their respective
-neighboring regions? Now that you have a complete function for image
-segmentation, try it on images with assorted subjects and sizes, and also vary
-your merge criterion with different values for the the mean distance instead of
-five.
+Can you implement a line-by-line merge strategy that, for each pixel on a
+line of the image, tests whether its region should be merged to the left
+and/or to the top? Can you iterate line by line until there are no more
+changes: that is, such that the resulting regions/sets all test negatively
+with their respective neighboring regions? Now that you have a complete
+function for image segmentation, try it on images with assorted subjects and
+sizes, and also vary your merge criterion with different values for the the
+mean distance instead of five.
 */
 // clang-22 chap8_chall11_image-segmentation.c $(pkg-config --cflags --libs
 // MagickWand) -fopenmp=libgomp
 int main(int argc, char *argv[]) {
-  size_t n = 16;
+  size_t h = 16, w = 16;
   unsigned char img[16][16] = {
       {21, 22, 21, 21, 22, 22, 19, 19, 22, 21, 22, 19, 18, 21, 20, 19},
       {18, 22, 18, 22, 21, 21, 22, 19, 22, 18, 22, 18, 18, 18, 19, 19},
@@ -59,5 +119,10 @@ int main(int argc, char *argv[]) {
       {151, 152, 148, 152, 148, 148, 18, 18, 20, 21, 20, 21, 22, 21, 21, 21},
   };
 
+  auto uf = uf_create(h * w);
+  regions(h, w, img, uf);
+  printf("%d %d\n", uf_connected(uf, 0, 1), uf_connected(uf, 2, 3));
+
+  uf_destroy(uf);
   return EXIT_SUCCESS;
 }

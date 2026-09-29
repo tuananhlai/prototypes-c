@@ -59,32 +59,3 @@ void uf_destroy(UnionFind* uf) {
   free(uf->parent);
   free(uf);
 }
-
-#ifndef UNIT_TEST
-int main() {
-  UnionFind* uf = uf_create(10);
-  printf("--- Initial State ---\n");
-  printf("Are 0 and 1 connected? %s\n", uf_connected(uf, 0, 1) ? "Yes" : "No");
-
-  printf("\n--- Performing Unions ---\n");
-  printf("Union(0, 1)\n");
-  uf_union(uf, 0, 1);
-  printf("Union(1, 2)\n");
-  uf_union(uf, 1, 2);
-  
-  printf("Are 0 and 2 connected? %s (Expected: Yes)\n", uf_connected(uf, 0, 2) ? "Yes" : "No");
-  printf("Are 0 and 3 connected? %s (Expected: No)\n", uf_connected(uf, 0, 3) ? "Yes" : "No");
-
-  printf("\n--- Merging Disjoint Sets ---\n");
-  printf("Union(3, 4)\n");
-  uf_union(uf, 3, 4);
-  printf("Union(2, 4) - Merging the two groups\n");
-  uf_union(uf, 2, 4);
-  
-  printf("Are 0 and 3 connected now? %s (Expected: Yes)\n", uf_connected(uf, 0, 3) ? "Yes" : "No");
-  printf("Are 0 and 9 connected? %s (Expected: No)\n", uf_connected(uf, 0, 9) ? "Yes" : "No");
-
-  uf_destroy(uf);
-  return 0;
-}
-#endif  // UNIT_TEST
