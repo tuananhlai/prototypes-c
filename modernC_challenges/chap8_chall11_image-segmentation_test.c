@@ -54,21 +54,18 @@ void test_regions_three_regions(void) {
   TEST_CHECK_(!uf_connected(uf, 0, 2) && !uf_connected(uf, 2, 6),
               "expect 20, 100 and 200 to be separate regions");
 
-  RegionStats expected[3][3] = {
-      {{4, 80}, {4, 80}, {2, 200}},
-      {{4, 80}, {4, 80}, {2, 200}},
-      {{3, 600}, {3, 600}, {3, 600}},
+  RegionStats expected[] = {
+      {4, 80},  {4, 80},  {2, 200}, {4, 80},  {4, 80},
+      {2, 200}, {3, 600}, {3, 600}, {3, 600},
   };
-  for (size_t i = 0; i < h; i++) {
-    for (size_t j = 0; j < w; j++) {
-      RegionStats stat = stats[uf_find(uf, to_1d_index(w, i, j))];
-      TEST_CHECK_(stat.count == expected[i][j].count,
-                  "pixel (%zu, %zu): expect count = %zu, got %zu", i, j,
-                  expected[i][j].count, stat.count);
-      TEST_CHECK_(stat.sum == expected[i][j].sum,
-                  "pixel (%zu, %zu): expect sum = %zu, got %zu", i, j,
-                  expected[i][j].sum, stat.sum);
-    }
+  for (size_t i = 0; i < n; i++) {
+    RegionStats stat = stats[i];
+    TEST_CHECK_(stat.count == expected[i].count,
+                "stats[%zu]: expect count = %zu, got %zu", i, expected[i].count,
+                stat.count);
+    TEST_CHECK_(stat.sum == expected[i].sum,
+                "stats[%zu]: expect sum = %zu, got %zu", i, expected[i].sum,
+                stat.sum);
   }
   uf_destroy(uf);
 }
@@ -88,9 +85,34 @@ void test_regions_threshold(void) {
   uf_destroy(uf);
 }
 
+void test_backward_merge(void) {
+  size_t h = 1, w = 3;
+  unsigned char img[1][3] = {{1, 7, 4}};
+  size_t n = h * w;
+  RegionStats stats[n];
+  UnionFind *uf = uf_create(n);
+
+  regions(h, w, img, uf, stats);
+
+  TEST_CHECK_(uf_connected(uf, 0, 1) && uf_connected(uf, 1, 2),
+              "expected pixel 0, 1, 2 to be connected");
+  RegionStats expected[] = {{3, 12}, {3, 12}, {3, 12}};
+  for (size_t i = 0; i < n; i++) {
+    RegionStats stat = stats[i];
+    TEST_CHECK_(stat.count == expected[i].count,
+                "stats[%zu]: expect count = %zu, got %zu", i, expected[i].count,
+                stat.count);
+    TEST_CHECK_(stat.sum == expected[i].sum,
+                "stats[%zu]: expect sum = %zu, got %zu", i, expected[i].sum,
+                stat.sum);
+  }
+  uf_destroy(uf);
+}
+
 TEST_LIST = {
     {"regions: uniform image is one region", test_regions_uniform},
     {"regions: three regions with stats", test_regions_three_regions},
     {"regions: merge threshold is 5", test_regions_threshold},
+    {"regions: backward merge", test_backward_merge},
     {NULL, NULL},
 };

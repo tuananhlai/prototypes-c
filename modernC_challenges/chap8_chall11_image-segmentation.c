@@ -69,6 +69,13 @@ void regions(size_t h, size_t w, const unsigned char img[h][w],
       }
     }
   }
+
+  for (size_t i = 0; i < h; i++) {
+    for (size_t j = 0; j < w; j++) {
+      size_t idx = to_1d_index(w, i, j);
+      out_stats[idx] = out_stats[uf_find(out_uf, idx)];
+    }
+  }
 }
 
 /**
@@ -98,38 +105,13 @@ values.
 
 Can you implement a line-by-line merge strategy that, for each pixel on a
 line of the image, tests whether its region should be merged to the left
-and/or to the top? Can you iterate line by line until there are no more
-changes: that is, such that the resulting regions/sets all test negatively
-with their respective neighboring regions? Now that you have a complete
-function for image segmentation, try it on images with assorted subjects and
-sizes, and also vary your merge criterion with different values for the the
-mean distance instead of five.
+and/or to the top?
+
+Can you iterate line by line until there are no more changes: that is, such that
+the resulting regions/sets all test negatively with their respective neighboring
+regions? Now that you have a complete function for image segmentation, try it on
+images with assorted subjects and sizes, and also vary your merge criterion with
+different values for the the mean distance instead of five.
 */
 // clang-22 chap8_chall11_image-segmentation.c $(pkg-config --cflags --libs
 // MagickWand) -fopenmp=libgomp
-#ifndef UNIT_TEST
-int main(void) {
-  size_t h = 5, w = 5;
-  unsigned char img[5][5] = {
-      {20, 20, 20, 20, 20},   
-      {20, 100, 100, 20, 20}, 
-      {20, 100, 100, 20, 20},
-      {20, 20, 20, 200, 200}, 
-      {20, 20, 20, 200, 200},
-  };
-
-  size_t n = h * w;
-  RegionStats stats[n];
-  auto uf = uf_create(n);
-
-  regions(h, w, img, uf, stats);
-  for (size_t i = 0; i < n; i++) {
-    size_t root = uf_find(uf, i);
-    printf("i = %zu, root = %zu, count = %zu, sum = %zu\n", i, root,
-           stats[root].count, stats[root].sum);
-  }
-
-  uf_destroy(uf);
-  return EXIT_SUCCESS;
-}
-#endif // UNIT_TEST
