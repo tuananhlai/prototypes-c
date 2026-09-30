@@ -46,13 +46,19 @@ size_t uf_find_compress(UnionFind *uf, size_t v) {
   return root;
 }
 
-size_t uf_union(UnionFind *uf, size_t a, size_t b) {
+void uf_union(UnionFind *uf, size_t a, size_t b) {
   size_t root_a = uf_find_compress(uf, a);
-  return uf_find_replace(uf, b, root_a);
+  uf_find_replace(uf, b, root_a);
 }
 
 bool uf_connected(UnionFind *uf, size_t a, size_t b) {
   return uf_find_compress(uf, a) == uf_find_compress(uf, b);
+}
+
+void uf_reset(UnionFind *uf) {
+  for (size_t i = 0; i < uf->parent_len; i++) {
+    uf->parent[i] = i;
+  }
 }
 
 void uf_destroy(UnionFind *uf) {

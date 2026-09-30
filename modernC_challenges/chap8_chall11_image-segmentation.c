@@ -25,6 +25,7 @@ size_t to_1d_index(size_t w, size_t i, size_t j) { return i * w + j; }
 void regions(size_t h, size_t w, const unsigned char img[h][w],
              UnionFind *out_uf, RegionStats *out_stats) {
   assert(out_uf->parent_len >= h * w);
+  uf_reset(out_uf);
 
   for (size_t i = 0; i < h; i++) {
     for (size_t j = 0; j < w; j++) {
@@ -35,26 +36,35 @@ void regions(size_t h, size_t w, const unsigned char img[h][w],
   }
 
   RegionStats top_stat, cur_stat, right_stat;
-  size_t cur_idx, top_idx, right_idx, region_root_idx;
+  size_t cur_idx, top_idx, right_idx;
   for (size_t i = 0; i < h; i++) {
     for (size_t j = 0; j < w; j++) {
-      cur_idx = to_1d_index(w, i, j);
+      cur_idx = uf_find(out_uf, to_1d_index(w, i, j));
       cur_stat = out_stats[cur_idx];
+
       if (i > 0) {
-        top_idx = to_1d_index(w, i - 1, j);
+        top_idx = uf_find(out_uf, to_1d_index(w, i - 1, j));
         top_stat = out_stats[top_idx];
-        if (fabs(region_mean(cur_stat) - region_mean(top_stat)) <= 5) {
-          region_root_idx = uf_union(out_uf, cur_idx, top_idx);
-          // FIXME: merge stats of the region root.
-          out_stats[region_root_idx] = region_merge(cur_stat, top_stat);
+
+        if (!uf_connected(out_uf, cur_idx, top_idx) &&
+            fabs(region_mean(cur_stat) - region_mean(top_stat)) <= 5) {
+          uf_union(out_uf, cur_idx, top_idx);
+          // TODO: refactor to improve readability
+          cur_idx = uf_find(out_uf, cur_idx);
+          out_stats[cur_idx] = region_merge(cur_stat, top_stat);
+          cur_stat = out_stats[cur_idx];
         }
       }
+
       if (j < w - 1) {
-        right_idx = to_1d_index(w, i, j + 1);
+        right_idx = uf_find(out_uf, to_1d_index(w, i, j + 1));
         right_stat = out_stats[right_idx];
-        if (fabs(region_mean(cur_stat) - region_mean(right_stat)) <= 5) {
-          region_root_idx = uf_union(out_uf, cur_idx, right_idx);
-          out_stats[region_root_idx] = region_merge(cur_stat, right_stat);
+
+        if (!uf_connected(out_uf, cur_idx, right_idx) &&
+            fabs(region_mean(cur_stat) - region_mean(right_stat)) <= 5) {
+          uf_union(out_uf, cur_idx, right_idx);
+          cur_idx = uf_find(out_uf, cur_idx);
+          out_stats[cur_idx] = region_merge(cur_stat, right_stat);
         }
       }
     }
@@ -97,13 +107,14 @@ mean distance instead of five.
 */
 // clang-22 chap8_chall11_image-segmentation.c $(pkg-config --cflags --libs
 // MagickWand) -fopenmp=libgomp
+#ifndef UNIT_TEST
 int main(void) {
   size_t h = 5, w = 5;
   unsigned char img[5][5] = {
-      {20, 20, 20, 20, 20},
+      {20, 20, 20, 20, 20},   
+      {20, 100, 100, 20, 20}, 
       {20, 100, 100, 20, 20},
-      {20, 100, 100, 20, 20},
-      {20, 20, 20, 200, 200},
+      {20, 20, 20, 200, 200}, 
       {20, 20, 20, 200, 200},
   };
 
@@ -114,10 +125,11 @@ int main(void) {
   regions(h, w, img, uf, stats);
   for (size_t i = 0; i < n; i++) {
     size_t root = uf_find(uf, i);
-    printf("i = %zu, root = %zu, count = %zu, sum = %zu\n", i, root, stats[root].count, stats[root].sum);
+    printf("i = %zu, root = %zu, count = %zu, sum = %zu\n", i, root,
+           stats[root].count, stats[root].sum);
   }
-
 
   uf_destroy(uf);
   return EXIT_SUCCESS;
 }
+#endif // UNIT_TEST
