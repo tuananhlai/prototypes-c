@@ -15,15 +15,15 @@ typedef struct {
   size_t sum;
 } RegionStats;
 
-double region_mean(RegionStats stat) { return (double)stat.sum / stat.count; }
+static double region_mean(RegionStats stat) { return (double)stat.sum / stat.count; }
 
-RegionStats region_merge(RegionStats dest, RegionStats src) {
+static RegionStats region_merge(RegionStats dest, RegionStats src) {
   return (RegionStats){.count = dest.count + src.count,
                        .sum = dest.sum + src.sum};
 }
 
 /** Return the row major order of the given [i, j] coordinate.  */
-size_t rm_index(size_t cols, size_t i, size_t j) { return i * cols + j; }
+static size_t rm_index(size_t cols, size_t i, size_t j) { return i * cols + j; }
 
 /**
  * Segment the given images into one or more regions based on pixel similarity

@@ -1,11 +1,17 @@
 # https://clangd.llvm.org/installation#project-setup
 # https://clangd.llvm.org/config
 CompileFlags:
-  Add: 
+  Add:
+    - "-xc"
     - "-std=c23"
     - "-Wall"
     - "-Wextra"
     - "-Wpedantic"
     - "-Wformat=2"
+    # From `pkg-config --cflags MagickWand`
+    - "-I/usr/include/aarch64-linux-gnu/ImageMagick-7"
     - "-I/usr/include/ImageMagick-7"
+    - "-DMAGICKCORE_HDRI_ENABLE=0"
+    - "-DMAGICKCORE_QUANTUM_DEPTH=16"
+    - "-DMAGICKCORE_CHANNEL_MASK_DEPTH=32"
 
