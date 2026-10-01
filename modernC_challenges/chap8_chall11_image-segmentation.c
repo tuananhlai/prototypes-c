@@ -35,12 +35,9 @@ void segment(size_t h, size_t w, const unsigned char img[h][w],
   uf_reset(out_uf);
 
   RegionStats stats[h * w];
-  for (size_t i = 0; i < h; i++) {
-    for (size_t j = 0; j < w; j++) {
-      size_t idx = rm_index(w, i, j);
-      stats[idx].count = 1;
-      stats[idx].sum = img[i][j];
-    }
+  for (size_t i = 0; i < sizeof(stats) / sizeof(RegionStats); i++) {
+    stats[i].count = 1;
+    stats[i].sum = img[i / w][i % w];
   }
 
   size_t cur_root, top_root, right_root;
@@ -54,7 +51,7 @@ void segment(size_t h, size_t w, const unsigned char img[h][w],
         if (i > 0) {
           top_root = uf_find(out_uf, rm_index(w, i - 1, j));
 
-          if (!uf_connected(out_uf, cur_root, top_root) &&
+          if (cur_root != top_root &&
               fabs(region_mean(stats[cur_root]) -
                    region_mean(stats[top_root])) <= MERGE_THRESHOLD) {
             has_merge = true;
@@ -67,7 +64,7 @@ void segment(size_t h, size_t w, const unsigned char img[h][w],
         if (j < w - 1) {
           right_root = uf_find(out_uf, rm_index(w, i, j + 1));
 
-          if (!uf_connected(out_uf, cur_root, right_root) &&
+          if (cur_root != right_root &&
               fabs(region_mean(stats[cur_root]) -
                    region_mean(stats[right_root])) <= MERGE_THRESHOLD) {
             has_merge = true;
