@@ -13,20 +13,15 @@ void test_regions_uniform(void) {
       {50, 50, 50},
   };
   size_t n = h * w;
-  RegionStats stats[n];
   UnionFind *uf = uf_create(n);
 
-  regions(h, w, img, uf, stats);
+  segment(h, w, img, uf);
 
   size_t root = uf_find(uf, 0);
   for (size_t i = 1; i < n; i++) {
     TEST_CHECK_(uf_find(uf, i) == root, "expect pixel %zu in region %zu", i,
                 root);
   }
-  TEST_CHECK_(stats[root].count == 9, "expect count = 9, got %zu",
-              stats[root].count);
-  TEST_CHECK_(stats[root].sum == 450, "expect sum = 450, got %zu",
-              stats[root].sum);
   uf_destroy(uf);
 }
 
@@ -39,10 +34,9 @@ void test_regions_three_regions(void) {
       {200, 200, 200},
   };
   size_t n = h * w;
-  RegionStats stats[n];
   UnionFind *uf = uf_create(n);
 
-  regions(h, w, img, uf, stats);
+  segment(h, w, img, uf);
 
   TEST_CHECK_(uf_connected(uf, 0, 1) && uf_connected(uf, 1, 3) &&
                   uf_connected(uf, 3, 4),
@@ -53,20 +47,6 @@ void test_regions_three_regions(void) {
               "expect 200 row (pixels 6, 7, 8) to be one region");
   TEST_CHECK_(!uf_connected(uf, 0, 2) && !uf_connected(uf, 2, 6),
               "expect 20, 100 and 200 to be separate regions");
-
-  RegionStats expected[] = {
-      {4, 80},  {4, 80},  {2, 200}, {4, 80},  {4, 80},
-      {2, 200}, {3, 600}, {3, 600}, {3, 600},
-  };
-  for (size_t i = 0; i < n; i++) {
-    RegionStats stat = stats[i];
-    TEST_CHECK_(stat.count == expected[i].count,
-                "stats[%zu]: expect count = %zu, got %zu", i, expected[i].count,
-                stat.count);
-    TEST_CHECK_(stat.sum == expected[i].sum,
-                "stats[%zu]: expect sum = %zu, got %zu", i, expected[i].sum,
-                stat.sum);
-  }
   uf_destroy(uf);
 }
 
@@ -74,13 +54,12 @@ void test_regions_threshold(void) {
   // Means 5 apart merge; 6 apart don't.
   unsigned char close[1][2] = {{10, 15}};
   unsigned char far[1][2] = {{10, 16}};
-  RegionStats stats[2];
   UnionFind *uf = uf_create(2);
 
-  regions(1, 2, close, uf, stats);
+  segment(1, 2, close, uf);
   TEST_CHECK_(uf_connected(uf, 0, 1), "expect 10 and 15 merged");
 
-  regions(1, 2, far, uf, stats);
+  segment(1, 2, far, uf);
   TEST_CHECK_(!uf_connected(uf, 0, 1), "expect 10 and 16 not merged");
   uf_destroy(uf);
 }
@@ -89,23 +68,12 @@ void test_backward_merge(void) {
   size_t h = 1, w = 3;
   unsigned char img[1][3] = {{1, 7, 4}};
   size_t n = h * w;
-  RegionStats stats[n];
   UnionFind *uf = uf_create(n);
 
-  regions(h, w, img, uf, stats);
+  segment(h, w, img, uf);
 
   TEST_CHECK_(uf_connected(uf, 0, 1) && uf_connected(uf, 1, 2),
               "expected pixel 0, 1, 2 to be connected");
-  RegionStats expected[] = {{3, 12}, {3, 12}, {3, 12}};
-  for (size_t i = 0; i < n; i++) {
-    RegionStats stat = stats[i];
-    TEST_CHECK_(stat.count == expected[i].count,
-                "stats[%zu]: expect count = %zu, got %zu", i, expected[i].count,
-                stat.count);
-    TEST_CHECK_(stat.sum == expected[i].sum,
-                "stats[%zu]: expect sum = %zu, got %zu", i, expected[i].sum,
-                stat.sum);
-  }
   uf_destroy(uf);
 }
 

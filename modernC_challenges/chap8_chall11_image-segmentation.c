@@ -8,6 +8,8 @@
 #define STB_DS_IMPLEMENTATION
 #include "../stb_ds.h"
 
+#define MERGE_THRESHOLD 5
+
 typedef struct {
   size_t count;
   size_t sum;
@@ -23,54 +25,55 @@ RegionStats region_merge(RegionStats dest, RegionStats src) {
 /** Return the row major order of the given [i, j] coordinate.  */
 size_t rm_index(size_t cols, size_t i, size_t j) { return i * cols + j; }
 
-void regions(size_t h, size_t w, const unsigned char img[h][w],
-             UnionFind *out_uf, RegionStats *out_stats) {
+/**
+ * Segment the given images into one or more regions based on pixel similarity
+ * and write the results into `out_uf`.
+ */
+void segment(size_t h, size_t w, const unsigned char img[h][w],
+             UnionFind *out_uf) {
   assert(out_uf->parent_len >= h * w);
   uf_reset(out_uf);
 
+  RegionStats stats[h * w];
   for (size_t i = 0; i < h; i++) {
     for (size_t j = 0; j < w; j++) {
       size_t idx = rm_index(w, i, j);
-      out_stats[idx].count = 1;
-      out_stats[idx].sum = img[i][j];
+      stats[idx].count = 1;
+      stats[idx].sum = img[i][j];
     }
   }
 
-  RegionStats top_stat, cur_stat, right_stat;
-  size_t cur_idx, top_idx, right_idx;
-
+  size_t cur_root, top_root, right_root;
   while (true) {
     bool has_merge = false;
+
     for (size_t i = 0; i < h; i++) {
       for (size_t j = 0; j < w; j++) {
-        cur_idx = uf_find(out_uf, rm_index(w, i, j));
-        cur_stat = out_stats[cur_idx];
+        cur_root = uf_find(out_uf, rm_index(w, i, j));
 
         if (i > 0) {
-          top_idx = uf_find(out_uf, rm_index(w, i - 1, j));
-          top_stat = out_stats[top_idx];
+          top_root = uf_find(out_uf, rm_index(w, i - 1, j));
 
-          if (!uf_connected(out_uf, cur_idx, top_idx) &&
-              fabs(region_mean(cur_stat) - region_mean(top_stat)) <= 5) {
+          if (!uf_connected(out_uf, cur_root, top_root) &&
+              fabs(region_mean(stats[cur_root]) -
+                   region_mean(stats[top_root])) <= MERGE_THRESHOLD) {
             has_merge = true;
-            uf_union(out_uf, cur_idx, top_idx);
-            // TODO: refactor to improve readability
-            cur_idx = uf_find(out_uf, cur_idx);
-            out_stats[cur_idx] = region_merge(cur_stat, top_stat);
-            cur_stat = out_stats[cur_idx];
+            uf_union(out_uf, cur_root, top_root);
+            cur_root = uf_find(out_uf, cur_root);
+            stats[cur_root] = region_merge(stats[cur_root], stats[top_root]);
           }
         }
 
         if (j < w - 1) {
-          right_idx = uf_find(out_uf, rm_index(w, i, j + 1));
-          right_stat = out_stats[right_idx];
+          right_root = uf_find(out_uf, rm_index(w, i, j + 1));
 
-          if (!uf_connected(out_uf, cur_idx, right_idx) &&
-              fabs(region_mean(cur_stat) - region_mean(right_stat)) <= 5) {
+          if (!uf_connected(out_uf, cur_root, right_root) &&
+              fabs(region_mean(stats[cur_root]) -
+                   region_mean(stats[right_root])) <= MERGE_THRESHOLD) {
             has_merge = true;
-            uf_union(out_uf, cur_idx, right_idx);
-            cur_idx = uf_find(out_uf, cur_idx);
-            out_stats[cur_idx] = region_merge(cur_stat, right_stat);
+            uf_union(out_uf, cur_root, right_root);
+            cur_root = uf_find(out_uf, cur_root);
+            stats[cur_root] = region_merge(stats[cur_root], stats[right_root]);
           }
         }
       }
@@ -78,13 +81,6 @@ void regions(size_t h, size_t w, const unsigned char img[h][w],
 
     if (!has_merge)
       break;
-  }
-
-  for (size_t i = 0; i < h; i++) {
-    for (size_t j = 0; j < w; j++) {
-      size_t idx = rm_index(w, i, j);
-      out_stats[idx] = out_stats[uf_find(out_uf, idx)];
-    }
   }
 }
 
