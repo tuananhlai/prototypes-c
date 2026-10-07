@@ -1,40 +1,67 @@
 #include "../arena.h"
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 
-struct Node {
+struct Blob {
   const char *val;
   size_t len;
-  struct Node *prev;
-  struct Node *next;
+  struct Blob *prev;
+  struct Blob *next;
 };
-typedef struct Node Node;
+typedef struct Blob Blob;
 
-/** `val` is BORROWED. */
-static Node *node_create(size_t len, const char val[len], Node *prev,
-                         Node *next) {
-  Node *retval = malloc(sizeof(Node));
-  retval->val = val;
-  retval->len = len;
-  retval->prev = prev;
-  retval->next = next;
-  if (retval->prev) {
-    retval->prev->next = retval;
+static void blob_init(Blob *blob, size_t len, const char val[len], Blob *prev,
+                      Blob *next) {
+  blob->val = val;
+  blob->len = len;
+  blob->prev = prev;
+  blob->next = next;
+  if (blob->prev) {
+    blob->prev->next = blob;
   }
-  if (retval->next) {
-    retval->next->prev = retval;
+  if (blob->next) {
+    blob->next->prev = blob;
   }
-  return retval;
 }
 
-static void node_destroy(Node* node) {
-  free(node);
+/** Split the given blob into two at `split_idx`. Write the right part to `out`.
+ */
+static void blob_split(Blob *blob, size_t split_idx, Blob *out) {
+  if (split_idx >= blob->len)
+    return;
+
+  auto original_next = blob->next;
+  blob_init(out, blob->len - split_idx, blob->val + split_idx, blob,
+            original_next);
+  blob->len = split_idx;
 }
 
 typedef struct {
-  Node *head;
+  Blob *head;
+  Blob *tail;
   Arena *arena;
 } Text;
+
+void text_blob_join(Text *text, const Blob *prev, const Blob *next) {
+  if (prev->next != next) {
+    return;
+  }
+
+  size_t merged_val_len = prev->len + next->len;
+  char *merged_val = arena_alloc(text->arena, merged_val_len);
+  memcpy(merged_val, prev->val, prev->len);
+  memcpy(merged_val + prev->len, next->val, next->len);
+
+  Blob *merged_blob = arena_alloc(text->arena, sizeof(*merged_blob));
+  blob_init(merged_blob, merged_val_len, merged_val, prev->prev, next->next);
+}
+
+void text_destroy(Text *text) {
+  arena_free(text->arena);
+  text->arena = nullptr;
+  free(text);
+}
 
 /**
 Challenge 12 (text processor). For a text processor, can you use a doubly linked
