@@ -1,3 +1,5 @@
+#include <assert.h>
+#include <stddef.h>
 #define ARENA_IMPLEMENTATION
 #include "../arena.h"
 #include <stdio.h>
@@ -66,9 +68,9 @@ void text_append(Text *text, const char *str) {
   }
 }
 
-static void text_blob_join(Text *text, const Blob *prev, const Blob *next) {
+static Blob *text_blob_join(Text *text, const Blob *prev, const Blob *next) {
   if (prev->next != next) {
-    return;
+    return nullptr;
   }
 
   size_t merged_val_len = prev->len + next->len;
@@ -78,10 +80,34 @@ static void text_blob_join(Text *text, const Blob *prev, const Blob *next) {
 
   Blob *merged_blob = arena_alloc(&text->arena, sizeof(*merged_blob));
   blob_init(merged_blob, merged_val_len, merged_val, prev->prev, next->next);
+  return merged_blob;
+}
+
+static void text_split_lines(Text *text) {
+  for (auto x = text->head; x; x = x->next) {
+    const char *newline;
+    while (true) {
+      newline = memchr(x->val, '\n', x->len);
+      if (newline != nullptr || x->next == nullptr)
+        break;
+
+      x = text_blob_join(text, x, x->next);
+    }
+
+    auto idx = newline - x->val;
+    assert(idx >= 0);
+    if ((size_t)idx == x->len - 1)
+      continue;
+
+    Blob *new_blob = arena_alloc(&text->arena, sizeof(*new_blob));
+    blob_split(x, idx + 1, new_blob);
+  }
 }
 
 void text_print(Text *text) {
+  size_t i = 0;
   for (auto x = text->head; x; x = x->next) {
+    printf("#%zu ", i++);
     fwrite(x->val, sizeof(char), x->len, stdout);
   }
 }
@@ -113,6 +139,8 @@ int main(void) {
   text_append(text, "hel\nlo");
   text_append(text, ",");
   text_append(text, "world!\n");
+
+  text_split_lines(text);
 
   text_print(text);
 
