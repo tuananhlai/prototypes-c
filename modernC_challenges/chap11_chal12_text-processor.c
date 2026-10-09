@@ -1,3 +1,4 @@
+#define ARENA_IMPLEMENTATION
 #include "../arena.h"
 #include <stdio.h>
 #include <stdlib.h>
@@ -40,26 +41,53 @@ static void blob_split(Blob *blob, size_t split_idx, Blob *out) {
 typedef struct {
   Blob *head;
   Blob *tail;
-  Arena *arena;
+  Arena arena;
 } Text;
 
-void text_blob_join(Text *text, const Blob *prev, const Blob *next) {
+Text *text_create() {
+  Arena arena = {0};
+  Text *retval = malloc(sizeof(Text));
+  retval->head = nullptr;
+  retval->tail = nullptr;
+  retval->arena = arena;
+  return retval;
+}
+
+void text_append(Text *text, const char *str) {
+  size_t val_len = strlen(str);
+  char *val = arena_alloc(&text->arena, sizeof(*val) * val_len);
+  memcpy(val, str, sizeof(*val) * val_len);
+  Blob *new_blob = arena_alloc(&text->arena, sizeof(*new_blob));
+  blob_init(new_blob, val_len, val, text->tail, nullptr);
+
+  text->tail = new_blob;
+  if (text->head == nullptr) {
+    text->head = new_blob;
+  }
+}
+
+static void text_blob_join(Text *text, const Blob *prev, const Blob *next) {
   if (prev->next != next) {
     return;
   }
 
   size_t merged_val_len = prev->len + next->len;
-  char *merged_val = arena_alloc(text->arena, merged_val_len);
+  char *merged_val = arena_alloc(&text->arena, merged_val_len);
   memcpy(merged_val, prev->val, prev->len);
   memcpy(merged_val + prev->len, next->val, next->len);
 
-  Blob *merged_blob = arena_alloc(text->arena, sizeof(*merged_blob));
+  Blob *merged_blob = arena_alloc(&text->arena, sizeof(*merged_blob));
   blob_init(merged_blob, merged_val_len, merged_val, prev->prev, next->next);
 }
 
+void text_print(Text *text) {
+  for (auto x = text->head; x; x = x->next) {
+    fwrite(x->val, sizeof(char), x->len, stdout);
+  }
+}
+
 void text_destroy(Text *text) {
-  arena_free(text->arena);
-  text->arena = nullptr;
+  arena_free(&text->arena);
   free(text);
 }
 
@@ -79,4 +107,15 @@ line?
 Can you create a function that prints the entire text or prints until the
 text is cut off due to the screen size?
 */
-int main(void) { return EXIT_SUCCESS; }
+int main(void) {
+  Text *text = text_create();
+
+  text_append(text, "hel\nlo");
+  text_append(text, ",");
+  text_append(text, "world!\n");
+
+  text_print(text);
+
+  text_destroy(text);
+  return EXIT_SUCCESS;
+}
