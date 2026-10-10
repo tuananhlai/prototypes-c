@@ -93,6 +93,8 @@ static void text_split_lines(Text *text) {
 
       x = text_blob_join(text, x, x->next);
     }
+    if (newline == nullptr)
+      break;
 
     auto idx = newline - x->val;
     assert(idx >= 0);
@@ -105,10 +107,28 @@ static void text_split_lines(Text *text) {
 }
 
 void text_print(Text *text) {
-  size_t i = 0;
   for (auto x = text->head; x; x = x->next) {
-    printf("#%zu ", i++);
     fwrite(x->val, sizeof(char), x->len, stdout);
+  }
+}
+
+void text_print_screen(Text *text, size_t width, size_t height) {
+  auto x = text->head;
+  size_t idx = 0;
+  for (size_t i = 0; i < height; i++) {
+    if (x == nullptr) break;
+    for (size_t j = 0; j < width; j++) {
+      if (x == nullptr) break;
+
+      putchar(x->val[idx]);
+      if (idx + 1 == x->len) {
+        x = x->next;
+        idx = 0;
+      } else {
+        idx++;
+      }
+    }
+    putchar('\n');
   }
 }
 
@@ -136,13 +156,19 @@ text is cut off due to the screen size?
 int main(void) {
   Text *text = text_create();
 
-  text_append(text, "hel\nlo");
-  text_append(text, ",");
-  text_append(text, "world!\n");
+  text_append(
+      text, "Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do "
+            "eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut "
+            "enim ad minim veniam, quis nostrud exercitation ullamco laboris "
+            "nisi ut aliquip ex ea commodo consequat. Duis aute irure dolor in "
+            "reprehenderit in voluptate velit esse cillum dolore eu fugiat "
+            "nulla pariatur. Excepteur sint occaecat cupidatat non proident, "
+            "sunt in culpa qui officia deserunt mollit anim id est laborum.");
 
   text_split_lines(text);
 
-  text_print(text);
+  // text_print(text);
+  text_print_screen(text, 40, 20);
 
   text_destroy(text);
   return EXIT_SUCCESS;
