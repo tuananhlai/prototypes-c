@@ -112,23 +112,37 @@ void text_print(Text *text) {
   }
 }
 
+// TODO: prevent cutoff in the middle of words.
 void text_print_screen(Text *text, size_t width, size_t height) {
   auto x = text->head;
-  size_t idx = 0;
-  for (size_t i = 0; i < height; i++) {
-    if (x == nullptr) break;
-    for (size_t j = 0; j < width; j++) {
-      if (x == nullptr) break;
+  size_t blob_val_idx = 0;
+  size_t line_cnt = 0;
+  size_t col_cnt = 0;
 
-      putchar(x->val[idx]);
-      if (idx + 1 == x->len) {
-        x = x->next;
-        idx = 0;
-      } else {
-        idx++;
-      }
+  while (true) {
+    if (line_cnt == height || x == nullptr) return;
+
+    if (blob_val_idx >= x->len) {
+      x = x->next;
+      blob_val_idx = 0;
+      continue;
     }
-    putchar('\n');
+
+    putchar(x->val[blob_val_idx]);
+    if (x->val[blob_val_idx] == '\n') {
+      line_cnt++;
+      col_cnt = 0;
+      blob_val_idx++;
+      continue;
+    }
+
+    blob_val_idx++;
+    col_cnt++;
+    if (col_cnt == width) {
+      putchar('\n');
+      line_cnt++;
+      col_cnt = 0;
+    }
   }
 }
 
@@ -158,7 +172,7 @@ int main(void) {
 
   text_append(
       text, "Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do "
-            "eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut "
+            "eiusmod tempor incididunt ut labore et dolore magna aliqua.\nUt "
             "enim ad minim veniam, quis nostrud exercitation ullamco laboris "
             "nisi ut aliquip ex ea commodo consequat. Duis aute irure dolor in "
             "reprehenderit in voluptate velit esse cillum dolore eu fugiat "
