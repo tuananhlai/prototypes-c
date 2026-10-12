@@ -1,4 +1,3 @@
-#include "../dynamic_string.h"
 #include <ctype.h>
 #include <stddef.h>
 #include <stdio.h>
@@ -6,6 +5,8 @@
 #include <string.h>
 #define ARENA_IMPLEMENTATION
 #include "../arena.h"
+#define STB_DS_IMPLEMENTATION
+#include "../stb_ds.h"
 
 typedef enum {
   TK_PUSH,
@@ -40,10 +41,10 @@ Token token_create3(TokenKind kind, size_t val_len, const char val[val_len]) {
 typedef struct {
   char *key;
   Token value;
-} TokenMap;
+} TokenMapEntry;
 
-TokenMap *tm_create() {
-  TokenMap *retval = nullptr;
+TokenMapEntry *tm_create(void) {
+  TokenMapEntry *retval = nullptr;
   shput(retval, "push", token_create(TK_PUSH));
   shput(retval, "pop", token_create(TK_POP));
   shput(retval, "add", token_create(TK_ADD));
@@ -57,54 +58,65 @@ TokenMap *tm_create() {
   return retval;
 }
 
-Token *tm_get(TokenMap *tm, const char *keyword) {
-  auto retval = shgetp_null(tm, keyword);
+const Token *tm_get(TokenMapEntry *tm, const char *keyword) {
+  TokenMapEntry *retval = shgetp_null(tm, keyword);
   if (retval == nullptr) {
     return nullptr;
   }
   return &retval->value;
 }
 
-void tm_destroy(TokenMap *tm) { shfree(tm); }
+void tm_destroy(TokenMapEntry *tm) { shfree(tm); }
 
 typedef struct {
-  Token *tokens;
-  size_t len;
-  size_t cap;
-  Arena *arena;
+  Token *items;
+  size_t count;
+  size_t capacity;
 } TokenList;
 
-TokenList *tokenlist_new(Arena *arena) {
-  TokenList *tl = arena_alloc(arena, sizeof(TokenList));
-  tl->tokens = nullptr;
-  tl->len = 0;
-  tl->cap = 0;
-  tl->arena = arena;
-  return tl;
-}
-
-void tokenlist_append(TokenList *tl, Token token) {
-  if (tl->len == tl->cap) {
-    size_t new_cap = (tl->cap + 1) * 2;
-    tl->tokens =
-        arena_realloc(tl->arena, tl->tokens, sizeof(*tl->tokens) * tl->cap,
-                      sizeof(*tl->tokens) * new_cap);
-    tl->cap = new_cap;
-  }
-  tl->tokens[tl->len] = token;
-  tl->len++;
+void tokenlist_append(Arena *arena, TokenList *tl, Token token) {
+  arena_da_append(arena, tl, token);
 }
 
 typedef struct {
-  TokenMap *builtin_tokens;
+  TokenMapEntry *builtin_tokens;
 } Lexer;
 
 void lexer_init(Lexer *lexer) { lexer->builtin_tokens = tm_create(); }
 
 void lexer_deinit(Lexer *lexer) { tm_destroy(lexer->builtin_tokens); }
 
-int lexer_tokenize(Lexer *lexer, size_t n, const char vm_line[n],
-                   TokenList *out_tokenlist) {
+static int resolve_word(Lexer *lexer, Arena *arena, const char *word,
+                        Token *out_token) {
+  size_t n = strlen(word);
+  if (n == 0) {
+    return -1;
+  }
+
+  const Token *builtin_token = tm_get(lexer->builtin_tokens, word);
+  if (builtin_token) {
+    *out_token = *builtin_token;
+    return 0;
+  }
+
+  if (isdigit(word[0])) {
+    for (size_t i = 1; i < n; i++) {
+      if (!isdigit(word[i]))
+        return -1;
+    }
+
+    char *val = arena_alloc(arena, sizeof(char) * n);
+    memcpy(val, word, n);
+    *out_token = token_create3(TK_NUMBER, n, val);
+
+    return 0;
+  }
+
+  return -1;
+}
+
+int lexer_tokenize(Lexer *lexer, Arena *arena, size_t n, const char vm_line[n],
+                   TokenList *out_tokens) {
   size_t i = 0;
   size_t len = 0;
 
@@ -117,15 +129,16 @@ int lexer_tokenize(Lexer *lexer, size_t n, const char vm_line[n],
       break;
     }
 
-    char key[len + 1];
-    memcpy(key, vm_line + i, len);
-    key[len] = '\0';
-    auto builtin_token = tm_get(lexer->builtin_tokens, key);
-    if (builtin_token) {
-      tokenlist_append(out_tokenlist, *builtin_token);
-    } else {
+    char word[len + 1];
+    memcpy(word, vm_line + i, len);
+    word[len] = '\0';
+
+    Token token = {0};
+    int res = resolve_word(lexer, arena, word, &token);
+    if (res != 0) {
       return -1;
     }
+    tokenlist_append(arena, out_tokens, token);
 
     i += len;
     len = 0;
@@ -134,34 +147,42 @@ int lexer_tokenize(Lexer *lexer, size_t n, const char vm_line[n],
   return 0;
 }
 
-int parse(size_t n, Token, String *out_assembly) { return -1; }
-
-/**
- * @brief Translate the given line of vm code to equivalent hack assembly.
- */
-int translate(char *vm_line, String *out_assembly) { return -1; }
-
 int main(void) {
-  Arena def = {0};
+  int status = EXIT_SUCCESS;
 
+  const char *lines[] = {" push constant  16", " pop local "};
+  // Allocated memory when processing a single line of source VM code, so it
+  // can be reseted afterward.
+  Arena scratch = {0};
   Lexer lexer = {0};
   lexer_init(&lexer);
 
-  auto tokenlist = tokenlist_new(&def);
-  auto res =
-      lexer_tokenize(&lexer, 26, "  push constant temp this ", tokenlist);
-  if (res < 0) {
-    puts("error cannot tokenize");
-    goto cleanup;
+  for (size_t i = 0; i < sizeof(lines) / sizeof(*lines); i++) {
+    TokenList tokens = {0};
+    const char *line = lines[i];
+    int res = lexer_tokenize(&lexer, &scratch, strlen(line), line, &tokens);
+    if (res < 0) {
+      puts("error cannot tokenize");
+      status = EXIT_FAILURE;
+      break;
+    }
+
+    puts(line);
+    for (size_t j = 0; j < tokens.count; j++) {
+      Token item = tokens.items[j];
+      printf("%d", item.kind);
+      if (item.val_len > 0) {
+        putchar(' ');
+        fwrite(item.val, sizeof(char), item.val_len, stdout);
+      }
+      putchar('\n');
+    }
+
+    arena_reset(&scratch);
   }
 
-  for (size_t i = 0; i < tokenlist->len; i++) {
-    printf("%d\n", tokenlist->tokens[i].kind);
-  }
-
-cleanup:
   lexer_deinit(&lexer);
-  arena_free(&def);
+  arena_free(&scratch);
 
-  return EXIT_SUCCESS;
+  return status;
 }
