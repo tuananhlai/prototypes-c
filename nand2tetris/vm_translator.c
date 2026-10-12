@@ -1,4 +1,6 @@
+#include "../dynamic_string.h"
 #include <ctype.h>
+#include <stdarg.h>
 #include <stddef.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -6,8 +8,23 @@
 #define ARENA_IMPLEMENTATION
 #include "../arena.h"
 #define STB_DS_IMPLEMENTATION
-#include "../dynamic_string.h"
 #include "../stb_ds.h"
+
+static char g_err[256];
+
+// Formats a message into the error buffer and returns -1, so failures can be
+// reported with `return error_set("...", ...);`.
+[[gnu::format(printf, 1, 2)]]
+static int error_set(const char *fmt, ...) {
+  va_list args;
+  va_start(args, fmt);
+  vsnprintf(g_err, sizeof g_err, fmt, args);
+  va_end(args);
+  return -1;
+}
+
+// Returns the message of the most recent error.
+static const char *error_get(void) { return g_err; }
 
 typedef enum {
   TK_PUSH,
@@ -91,7 +108,7 @@ static int resolve_word(Lexer *lexer, Arena *arena, const char *word,
                         Token *out_token) {
   size_t n = strlen(word);
   if (n == 0) {
-    return -1;
+    return error_set("empty word");
   }
 
   const Token *builtin_token = tm_get(lexer->builtin_tokens, word);
@@ -103,7 +120,7 @@ static int resolve_word(Lexer *lexer, Arena *arena, const char *word,
   if (isdigit(word[0])) {
     for (size_t i = 1; i < n; i++) {
       if (!isdigit(word[i]))
-        return -1;
+        return error_set("invalid number '%s'", word);
     }
 
     char *val = arena_alloc(arena, sizeof(char) * n);
@@ -113,7 +130,7 @@ static int resolve_word(Lexer *lexer, Arena *arena, const char *word,
     return 0;
   }
 
-  return -1;
+  return error_set("unknown word '%s'", word);
 }
 
 int lexer_tokenize(Lexer *lexer, Arena *arena, size_t n, const char vm_line[n],
@@ -171,7 +188,7 @@ typedef struct {
 
 static int parser_read_segment(Parser *p, MemorySegment *out_ms) {
   if (p->cur >= p->tokens->count) {
-    return -1;
+    return error_set("expected memory segment, got end of line");
   }
 
   switch (p->tokens->items[p->cur].kind) {
@@ -195,7 +212,7 @@ static int parser_read_segment(Parser *p, MemorySegment *out_ms) {
     *out_ms = MS_TEMP;
     break;
   default:
-    return -1;
+    return error_set("expected memory segment at token %zu", p->cur + 1);
   }
 
   p->cur++;
@@ -203,10 +220,10 @@ static int parser_read_segment(Parser *p, MemorySegment *out_ms) {
 }
 
 static int parser_read_number(Parser *p, size_t *out_num) {
-  if (p->cur >= p->tokens->count ||
-      p->tokens->items[p->cur].kind != TK_NUMBER) {
-    return -1;
-  }
+  if (p->cur >= p->tokens->count)
+    return error_set("expected number, got end of line");
+  if (p->tokens->items[p->cur].kind != TK_NUMBER)
+    return error_set("expected number at token %zu", p->cur + 1);
 
   Token token = p->tokens->items[p->cur];
   char num_str[token.val_len + 1];
@@ -215,9 +232,10 @@ static int parser_read_number(Parser *p, size_t *out_num) {
 
   int num = atoi(num_str);
   if (num < 0)
-    return -1;
+    return error_set("invalid number '%s'", num_str);
 
   *out_num = num;
+  p->cur++;
   return 0;
 }
 
@@ -237,24 +255,28 @@ int parser_parse(Parser *p, const TokenList *tokens, String *out_hack) {
       return -1;
 
     res = parser_read_number(p, &cmd.index);
-    if (res < 0) return -1;
+    if (res < 0)
+      return -1;
 
     // TODO: translate command push to Hack and write to out_hack.
 
     return 0;
   }
 
-  return -1;
+  return error_set("unsupported command (token kind %d)",
+                   p->tokens->items[0].kind);
 }
 
 int main(void) {
   int status = EXIT_SUCCESS;
 
-  const char *lines[] = {" push constant  16", " pop local "};
+  const char *lines[] = {" push constant pop", " pop local "};
   // Allocated memory when processing a single line of source VM code, so it
   // can be reseted afterward.
   Arena scratch = {0};
   Lexer lexer = {0};
+  Parser p = {0};
+  String hack = s_new();
   lexer_init(&lexer);
 
   for (size_t i = 0; i < sizeof(lines) / sizeof(*lines); i++) {
@@ -262,7 +284,7 @@ int main(void) {
     const char *line = lines[i];
     int res = lexer_tokenize(&lexer, &scratch, strlen(line), line, &tokens);
     if (res < 0) {
-      puts("error cannot tokenize");
+      fputs(error_get(), stderr);
       status = EXIT_FAILURE;
       break;
     }
@@ -278,9 +300,17 @@ int main(void) {
       putchar('\n');
     }
 
+    res = parser_parse(&p, &tokens, &hack);
+    if (res < 0) {
+      fputs(error_get(), stderr);
+      status = EXIT_FAILURE;
+      break;
+    }
+
     arena_reset(&scratch);
   }
 
+  s_destroy(&hack);
   lexer_deinit(&lexer);
   arena_free(&scratch);
 
