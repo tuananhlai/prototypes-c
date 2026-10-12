@@ -6,6 +6,7 @@
 #define ARENA_IMPLEMENTATION
 #include "../arena.h"
 #define STB_DS_IMPLEMENTATION
+#include "../dynamic_string.h"
 #include "../stb_ds.h"
 
 typedef enum {
@@ -145,6 +146,105 @@ int lexer_tokenize(Lexer *lexer, Arena *arena, size_t n, const char vm_line[n],
   }
 
   return 0;
+}
+
+typedef struct {
+  size_t cur;
+  const TokenList *tokens;
+} Parser;
+
+typedef enum {
+  MS_ARGUMENT,
+  MS_LOCAL,
+  MS_STATIC,
+  MS_CONSTANT,
+  MS_THIS,
+  MS_THAT,
+  MS_POINTER,
+  MS_TEMP,
+} MemorySegment;
+
+typedef struct {
+  MemorySegment segment;
+  size_t index;
+} CommandPush;
+
+static int parser_read_segment(Parser *p, MemorySegment *out_ms) {
+  if (p->cur >= p->tokens->count) {
+    return -1;
+  }
+
+  switch (p->tokens->items[p->cur].kind) {
+
+  case TK_CONSTANT:
+    *out_ms = MS_CONSTANT;
+    break;
+  case TK_LOCAL:
+    *out_ms = MS_LOCAL;
+    break;
+  case TK_ARGUMENT:
+    *out_ms = MS_ARGUMENT;
+    break;
+  case TK_THIS:
+    *out_ms = MS_THIS;
+    break;
+  case TK_THAT:
+    *out_ms = MS_THAT;
+    break;
+  case TK_TEMP:
+    *out_ms = MS_TEMP;
+    break;
+  default:
+    return -1;
+  }
+
+  p->cur++;
+  return 0;
+}
+
+static int parser_read_number(Parser *p, size_t *out_num) {
+  if (p->cur >= p->tokens->count ||
+      p->tokens->items[p->cur].kind != TK_NUMBER) {
+    return -1;
+  }
+
+  Token token = p->tokens->items[p->cur];
+  char num_str[token.val_len + 1];
+  num_str[token.val_len] = '\0';
+  memcpy(num_str, token.val, token.val_len);
+
+  int num = atoi(num_str);
+  if (num < 0)
+    return -1;
+
+  *out_num = num;
+  return 0;
+}
+
+int parser_parse(Parser *p, const TokenList *tokens, String *out_hack) {
+  s_clear(out_hack);
+  if (tokens->count == 0) {
+    return 0;
+  }
+
+  p->cur = 0;
+  p->tokens = tokens;
+  if (p->tokens->items[p->cur].kind == TK_PUSH) {
+    p->cur++;
+    CommandPush cmd = {0};
+    int res = parser_read_segment(p, &cmd.segment);
+    if (res < 0)
+      return -1;
+
+    res = parser_read_number(p, &cmd.index);
+    if (res < 0) return -1;
+
+    // TODO: translate command push to Hack and write to out_hack.
+
+    return 0;
+  }
+
+  return -1;
 }
 
 int main(void) {
