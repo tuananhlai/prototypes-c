@@ -37,6 +37,7 @@ typedef enum {
   TK_THIS,
   TK_THAT,
   TK_TEMP,
+  TK_STATIC,
   TK_NUMBER,
 } TokenKind;
 
@@ -72,6 +73,7 @@ TokenMapEntry *tm_create(void) {
   shput(retval, "argument", token_create(TK_ARGUMENT));
   shput(retval, "this", token_create(TK_THIS));
   shput(retval, "that", token_create(TK_THAT));
+  shput(retval, "static", token_create(TK_STATIC));
   shput(retval, "temp", token_create(TK_TEMP));
   return retval;
 }
@@ -168,7 +170,6 @@ int lexer_tokenize(Lexer *lexer, Arena *arena, size_t n, const char vm_line[n],
 typedef struct {
   size_t cur;
   const TokenList *tokens;
-  const char *_push_cmd;
   const char *_file_name;
 } Parser;
 
@@ -187,6 +188,12 @@ typedef struct {
   MemorySegment segment;
   size_t index;
 } CommandPush;
+
+void parser_init(Parser* p, const char* file_name) {
+  p->cur = 0;
+  p->tokens = nullptr;
+  p->_file_name = file_name;
+}
 
 // Hack Assembly code which pushes the value stored inside the D register
 // into the stack.
@@ -217,6 +224,9 @@ static int parser_read_segment(Parser *p, MemorySegment *out_ms) {
     break;
   case TK_TEMP:
     *out_ms = MS_TEMP;
+    break;
+  case TK_STATIC:
+    *out_ms = MS_STATIC;
     break;
   default:
     return error_set("expected memory segment at token %zu", p->cur + 1);
@@ -255,9 +265,14 @@ static int parser_read_eol(Parser *p) {
   return 0;
 }
 
-int to_str(size_t num, size_t len, char index_str[static 25]) {
-  int n = snprintf(index_str, sizeof(char) * len, "%zu", num);
-  if (n < 0 || (size_t)n >= sizeof(char) * len) {
+// Maximum number of digit a string converted from size_t can have.
+#define SIZE_T_STR_MAX_DIGITS 21
+
+// Convert size_t to string.
+static int to_str(size_t num, size_t str_size,
+                  char str[static SIZE_T_STR_MAX_DIGITS]) {
+  int n = snprintf(str, str_size, "%zu", num);
+  if (n < 0 || (size_t)n >= str_size) {
     error_set("error converting int to str: %zu", num);
     return -1;
   }
@@ -267,13 +282,11 @@ int to_str(size_t num, size_t len, char index_str[static 25]) {
 #define TEMP_ADDR 5
 
 static int command_push_translate(Parser *p, CommandPush cmd, String *out) {
-  // TODO: support other type of memory segments
   // TODO: validate size of `index`
   // max number of digit for 64-bit uint
-  char index_str[25];
-  int n = snprintf(index_str, sizeof(index_str), "%zu", cmd.index);
-  if (n < 0 || (size_t)n >= sizeof(index_str)) {
-    error_set("error converting int to str: %zu", cmd.index);
+  char index_str[SIZE_T_STR_MAX_DIGITS];
+  int res = to_str(cmd.index, sizeof(index_str), index_str);
+  if (res < 0) {
     return -1;
   }
 
@@ -285,6 +298,11 @@ static int command_push_translate(Parser *p, CommandPush cmd, String *out) {
     s_append(out, hack_asm_push);
     return 0;
   case MS_LOCAL:
+    s_append(out, "@LCL\nD=M\n@");
+    s_append(out, index_str);
+    s_append(out, "\nA=D+A\nD=M\n");
+    s_append(out, hack_asm_push);
+    return 0;
   case MS_STATIC:
     String symbol = s_new();
     s_append(&symbol, p->_file_name);
@@ -305,10 +323,43 @@ static int command_push_translate(Parser *p, CommandPush cmd, String *out) {
     s_append(out, hack_asm_push);
     return 0;
   case MS_THIS:
+    s_append(out, "@THIS\nD=M\n@");
+    s_append(out, index_str);
+    s_append(out, "\nA=D+A\nD=M\n");
+    s_append(out, hack_asm_push);
+    return 0;
   case MS_THAT:
+    s_append(out, "@THAT\nD=M\n@");
+    s_append(out, index_str);
+    s_append(out, "\nA=D+A\nD=M\n");
+    s_append(out, hack_asm_push);
+    return 0;
   case MS_POINTER:
+    if (cmd.index != 0 && cmd.index != 1) {
+      return error_set(
+          "error invalid index for pointer segment: expect 0 or 1, got %zu",
+          cmd.index);
+    }
+
+    if (cmd.index == 0) {
+      s_append(out, "@THIS\nD=M\n");
+    } else {
+      s_append(out, "@THAT\nD=M\n");
+    }
+    s_append(out, hack_asm_push);
+    return 0;
   case MS_TEMP:
-    break;
+    char addr_str[SIZE_T_STR_MAX_DIGITS];
+    res = to_str(TEMP_ADDR + cmd.index, sizeof(addr_str), addr_str);
+    if (res < 0) {
+      return -1;
+    }
+
+    s_append(out, "@");
+    s_append(out, addr_str);
+    s_append(out, "\nD=M\n");
+    s_append(out, hack_asm_push);
+    return 0;
   }
 
   return -1;
@@ -369,12 +420,13 @@ int parser_parse(Parser *p, const TokenList *tokens, String *out_hack) {
 int main(void) {
   int status = EXIT_SUCCESS;
 
-  const char *lines[] = {" push constant 4", "push constant 91", "add"};
+  const char *lines[] = {" push static 4", "push constant 91", "add"};
   // Allocated memory when processing a single line of source VM code, so it
   // can be reseted afterward.
   Arena scratch = {0};
   Lexer lexer = {0};
-  Parser p = {0};
+  Parser p;
+  parser_init(&p, "Foo");
   String hack = s_new();
   lexer_init(&lexer);
 
