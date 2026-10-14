@@ -169,6 +169,7 @@ typedef struct {
   size_t cur;
   const TokenList *tokens;
   const char *_push_cmd;
+  const char *_file_name;
 } Parser;
 
 typedef enum {
@@ -245,20 +246,72 @@ static int parser_read_number(Parser *p, size_t *out_num) {
   return 0;
 }
 
-int command_push_translate(CommandPush cmd, String *out) {
+static int parser_read_eol(Parser *p) {
+  if (p->cur < p->tokens->count) {
+    return error_set("expected eol, got token kind %d",
+                     p->tokens->items[p->cur].kind);
+  }
+
+  return 0;
+}
+
+int to_str(size_t num, size_t len, char index_str[static 25]) {
+  int n = snprintf(index_str, sizeof(char) * len, "%zu", num);
+  if (n < 0 || (size_t)n >= sizeof(char) * len) {
+    error_set("error converting int to str: %zu", num);
+    return -1;
+  }
+  return 0;
+}
+
+#define TEMP_ADDR 5
+
+static int command_push_translate(Parser *p, CommandPush cmd, String *out) {
   // TODO: support other type of memory segments
   // TODO: validate size of `index`
   // max number of digit for 64-bit uint
-  char buf[25];
-  int n = snprintf(buf, sizeof(buf), "@%zu\n", cmd.index);
-  if (n < 0 || (size_t)n >= sizeof(buf)) {
+  char index_str[25];
+  int n = snprintf(index_str, sizeof(index_str), "%zu", cmd.index);
+  if (n < 0 || (size_t)n >= sizeof(index_str)) {
     error_set("error converting int to str: %zu", cmd.index);
     return -1;
   }
-  s_append(out, buf);
-  s_append(out, "D=A\n");
-  s_append(out, hack_asm_push);
-  return 0;
+
+  switch (cmd.segment) {
+  case MS_ARGUMENT:
+    s_append(out, "@ARG\nD=M\n@");
+    s_append(out, index_str);
+    s_append(out, "\nA=D+A\nD=M\n");
+    s_append(out, hack_asm_push);
+    return 0;
+  case MS_LOCAL:
+  case MS_STATIC:
+    String symbol = s_new();
+    s_append(&symbol, p->_file_name);
+    s_append(&symbol, ".");
+    s_append(&symbol, index_str);
+
+    s_append(out, "@");
+    s_append(out, symbol.data);
+    s_append(out, "\nD=M\n");
+    s_append(out, hack_asm_push);
+
+    s_destroy(&symbol);
+    return 0;
+  case MS_CONSTANT:
+    s_append(out, "@");
+    s_append(out, index_str);
+    s_append(out, "\nD=A\n");
+    s_append(out, hack_asm_push);
+    return 0;
+  case MS_THIS:
+  case MS_THAT:
+  case MS_POINTER:
+  case MS_TEMP:
+    break;
+  }
+
+  return -1;
 }
 
 int parser_parse(Parser *p, const TokenList *tokens, String *out_hack) {
@@ -280,7 +333,12 @@ int parser_parse(Parser *p, const TokenList *tokens, String *out_hack) {
     if (res < 0)
       return -1;
 
-    res = command_push_translate(cmd, out_hack);
+    res = parser_read_eol(p);
+    if (res < 0) {
+      return -1;
+    }
+
+    res = command_push_translate(p, cmd, out_hack);
     if (res < 0) {
       return -1;
     }
@@ -289,7 +347,15 @@ int parser_parse(Parser *p, const TokenList *tokens, String *out_hack) {
   }
 
   if (p->tokens->items[p->cur].kind == TK_ADD) {
-    // pop the top two value of the stack, add them together and put the result in the D register.
+    p->cur++;
+
+    int res = parser_read_eol(p);
+    if (res < 0) {
+      return -1;
+    }
+
+    // pop the top two value of the stack, add them together and put the result
+    // in the D register.
     const char *hack_assembly_add =
         "@SP\nA=M\nD=M\n@SP\nM=M-1\n@SP\nA=M\nD=D+M\n@SP\nM=M-1\n";
     s_set(out_hack, hack_assembly_add, strlen(hack_assembly_add));
@@ -321,6 +387,9 @@ int main(void) {
       status = EXIT_FAILURE;
       break;
     }
+
+    if (tokens.count == 0)
+      continue;
 
     // puts(line);
     // for (size_t j = 0; j < tokens.count; j++) {
