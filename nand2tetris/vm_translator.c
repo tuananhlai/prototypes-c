@@ -168,6 +168,7 @@ int lexer_tokenize(Lexer *lexer, Arena *arena, size_t n, const char vm_line[n],
 typedef struct {
   size_t cur;
   const TokenList *tokens;
+  const char *_push_cmd;
 } Parser;
 
 typedef enum {
@@ -185,6 +186,11 @@ typedef struct {
   MemorySegment segment;
   size_t index;
 } CommandPush;
+
+// Hack Assembly code which pushes the value stored inside the D register
+// into the stack.
+// TODO: how to check for stack overflow?
+static const char *hack_asm_push = "@SP\nA=M\nM=D\n@SP\nM=M+1\n";
 
 static int parser_read_segment(Parser *p, MemorySegment *out_ms) {
   if (p->cur >= p->tokens->count) {
@@ -239,6 +245,22 @@ static int parser_read_number(Parser *p, size_t *out_num) {
   return 0;
 }
 
+int command_push_translate(CommandPush cmd, String *out) {
+  // TODO: support other type of memory segments
+  // TODO: validate size of `index`
+  // max number of digit for 64-bit uint
+  char buf[25];
+  int n = snprintf(buf, sizeof(buf), "@%zu\n", cmd.index);
+  if (n < 0 || (size_t)n >= sizeof(buf)) {
+    error_set("error converting int to str: %zu", cmd.index);
+    return -1;
+  }
+  s_append(out, buf);
+  s_append(out, "D=A\n");
+  s_append(out, hack_asm_push);
+  return 0;
+}
+
 int parser_parse(Parser *p, const TokenList *tokens, String *out_hack) {
   s_clear(out_hack);
   if (tokens->count == 0) {
@@ -258,19 +280,30 @@ int parser_parse(Parser *p, const TokenList *tokens, String *out_hack) {
     if (res < 0)
       return -1;
 
-    // TODO: translate command push to Hack and write to out_hack.
+    res = command_push_translate(cmd, out_hack);
+    if (res < 0) {
+      return -1;
+    }
 
+    return 0;
+  }
+
+  if (p->tokens->items[p->cur].kind == TK_ADD) {
+    // pop the top two value of the stack, add them together and put the result in the D register.
+    const char *hack_assembly_add =
+        "@SP\nA=M\nD=M\n@SP\nM=M-1\n@SP\nA=M\nD=D+M\n@SP\nM=M-1\n";
+    s_set(out_hack, hack_assembly_add, strlen(hack_assembly_add));
+    s_append(out_hack, hack_asm_push);
     return 0;
   }
 
   return error_set("unsupported command (token kind %d)",
                    p->tokens->items[0].kind);
 }
-
 int main(void) {
   int status = EXIT_SUCCESS;
 
-  const char *lines[] = {" push constant pop", " pop local "};
+  const char *lines[] = {" push constant 4", "push constant 91", "add"};
   // Allocated memory when processing a single line of source VM code, so it
   // can be reseted afterward.
   Arena scratch = {0};
@@ -289,16 +322,16 @@ int main(void) {
       break;
     }
 
-    puts(line);
-    for (size_t j = 0; j < tokens.count; j++) {
-      Token item = tokens.items[j];
-      printf("%d", item.kind);
-      if (item.val_len > 0) {
-        putchar(' ');
-        fwrite(item.val, sizeof(char), item.val_len, stdout);
-      }
-      putchar('\n');
-    }
+    // puts(line);
+    // for (size_t j = 0; j < tokens.count; j++) {
+    //   Token item = tokens.items[j];
+    //   printf("%d", item.kind);
+    //   if (item.val_len > 0) {
+    //     putchar(' ');
+    //     fwrite(item.val, sizeof(char), item.val_len, stdout);
+    //   }
+    //   putchar('\n');
+    // }
 
     res = parser_parse(&p, &tokens, &hack);
     if (res < 0) {
@@ -306,6 +339,8 @@ int main(void) {
       status = EXIT_FAILURE;
       break;
     }
+
+    fputs(hack.data, stdout);
 
     arena_reset(&scratch);
   }
