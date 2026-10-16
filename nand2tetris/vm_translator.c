@@ -12,6 +12,7 @@
 
 static char g_err[256];
 
+// TODO: think about a better error handling mechanism.
 // Formats a message into the error buffer and returns -1, so failures can be
 // reported with `return error_set("...", ...);`.
 [[gnu::format(printf, 1, 2)]]
@@ -47,9 +48,10 @@ typedef struct {
   size_t val_len;
 } Token;
 
-Token token_create(TokenKind kind) { return (Token){.kind = kind}; }
+static Token token_create(TokenKind kind) { return (Token){.kind = kind}; }
 
-Token token_create3(TokenKind kind, size_t val_len, const char val[val_len]) {
+static Token token_create3(TokenKind kind, size_t val_len,
+                           const char val[val_len]) {
   return (Token){
       .kind = kind,
       .val = val,
@@ -78,7 +80,7 @@ TokenMapEntry *tm_create(void) {
   return retval;
 }
 
-const Token *tm_get(TokenMapEntry *tm, const char *keyword) {
+static const Token *tm_get(TokenMapEntry *tm, const char *keyword) {
   TokenMapEntry *retval = shgetp_null(tm, keyword);
   if (retval == nullptr) {
     return nullptr;
@@ -86,7 +88,7 @@ const Token *tm_get(TokenMapEntry *tm, const char *keyword) {
   return &retval->value;
 }
 
-void tm_destroy(TokenMapEntry *tm) { shfree(tm); }
+static void tm_destroy(TokenMapEntry *tm) { shfree(tm); }
 
 typedef struct {
   Token *items;
@@ -94,7 +96,7 @@ typedef struct {
   size_t capacity;
 } TokenList;
 
-void tokenlist_append(Arena *arena, TokenList *tl, Token token) {
+static void tokenlist_append(Arena *arena, TokenList *tl, Token token) {
   arena_da_append(arena, tl, token);
 }
 
@@ -102,9 +104,9 @@ typedef struct {
   TokenMapEntry *builtin_tokens;
 } Lexer;
 
-void lexer_init(Lexer *lexer) { lexer->builtin_tokens = tm_create(); }
+static void lexer_init(Lexer *lexer) { lexer->builtin_tokens = tm_create(); }
 
-void lexer_deinit(Lexer *lexer) { tm_destroy(lexer->builtin_tokens); }
+static void lexer_deinit(Lexer *lexer) { tm_destroy(lexer->builtin_tokens); }
 
 static int resolve_word(Lexer *lexer, Arena *arena, const char *word,
                         Token *out_token) {
@@ -135,15 +137,16 @@ static int resolve_word(Lexer *lexer, Arena *arena, const char *word,
   return error_set("unknown word '%s'", word);
 }
 
-int lexer_tokenize(Lexer *lexer, Arena *arena, size_t n, const char vm_line[n],
-                   TokenList *out_tokens) {
+static int lexer_tokenize(Lexer *lexer, Arena *arena, size_t vm_line_len,
+                          const char vm_line[vm_line_len],
+                          TokenList *out_tokens) {
   size_t i = 0;
   size_t len = 0;
 
-  while (i < n) {
-    while (i < n && isspace(vm_line[i]))
+  while (i < vm_line_len) {
+    while (i < vm_line_len && isspace(vm_line[i]))
       i++;
-    while (i + len < n && !isspace(vm_line[i + len]))
+    while (i + len < vm_line_len && !isspace(vm_line[i + len]))
       len++;
     if (len == 0) {
       break;
@@ -189,7 +192,7 @@ typedef struct {
   size_t index;
 } CommandPush;
 
-void parser_init(Parser* p, const char* file_name) {
+static void parser_init(Parser *p, const char *file_name) {
   p->cur = 0;
   p->tokens = nullptr;
   p->_file_name = file_name;
@@ -365,7 +368,7 @@ static int command_push_translate(Parser *p, CommandPush cmd, String *out) {
   return -1;
 }
 
-int parser_parse(Parser *p, const TokenList *tokens, String *out_hack) {
+static int parser_parse(Parser *p, const TokenList *tokens, String *out_hack) {
   s_clear(out_hack);
   if (tokens->count == 0) {
     return 0;
@@ -417,58 +420,72 @@ int parser_parse(Parser *p, const TokenList *tokens, String *out_hack) {
   return error_set("unsupported command (token kind %d)",
                    p->tokens->items[0].kind);
 }
-int main(void) {
-  int status = EXIT_SUCCESS;
 
-  const char *lines[] = {" push static 4", "push constant 91", "add"};
-  // Allocated memory when processing a single line of source VM code, so it
-  // can be reseted afterward.
+/**
+ * @brief Read a line from a file stream into a String.
+ * @return EOF (-1) if we reached EOF and no data were read. 0 otherwise.
+ */
+static int readline(FILE *fp, String *s) {
+  s_clear(s);
+
+  int ch;
+  while (true) {
+    ch = fgetc(fp);
+    if (ch == '\n' || ch == EOF) {
+      break;
+    }
+    s_appendc(s, ch);
+  }
+
+  if (s->len == 0 && ch == EOF)
+    return EOF;
+
+  return 0;
+}
+
+int translate(const char *in_file_name, FILE *in, FILE *out) {
   Arena scratch = {0};
   Lexer lexer = {0};
-  Parser p;
-  parser_init(&p, "Foo");
-  String hack = s_new();
   lexer_init(&lexer);
+  Parser p;
+  parser_init(&p, in_file_name);
+  String line = s_new();
+  String hack = s_new();
+  int retval = -1;
 
-  for (size_t i = 0; i < sizeof(lines) / sizeof(*lines); i++) {
+  while (true) {
+    s_clear(&line);
+    int res = readline(in, &line);
+    if (res == EOF)
+      break;
+
     TokenList tokens = {0};
-    const char *line = lines[i];
-    int res = lexer_tokenize(&lexer, &scratch, strlen(line), line, &tokens);
+    res = lexer_tokenize(&lexer, &scratch, line.len, line.data, &tokens);
     if (res < 0) {
       fputs(error_get(), stderr);
-      status = EXIT_FAILURE;
-      break;
+      goto cleanup;
     }
 
     if (tokens.count == 0)
       continue;
 
-    // puts(line);
-    // for (size_t j = 0; j < tokens.count; j++) {
-    //   Token item = tokens.items[j];
-    //   printf("%d", item.kind);
-    //   if (item.val_len > 0) {
-    //     putchar(' ');
-    //     fwrite(item.val, sizeof(char), item.val_len, stdout);
-    //   }
-    //   putchar('\n');
-    // }
-
     res = parser_parse(&p, &tokens, &hack);
     if (res < 0) {
       fputs(error_get(), stderr);
-      status = EXIT_FAILURE;
-      break;
+      goto cleanup;
     }
 
-    fputs(hack.data, stdout);
+    // TODO: handle error
+    fwrite(hack.data, sizeof(char), hack.len, out);
 
     arena_reset(&scratch);
   }
+  retval = 0;
 
+cleanup:
   s_destroy(&hack);
+  s_destroy(&line);
   lexer_deinit(&lexer);
   arena_free(&scratch);
-
-  return status;
+  return retval;
 }
