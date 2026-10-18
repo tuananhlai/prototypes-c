@@ -24,7 +24,7 @@ int main(int argc, char *argv[argc]) {
     goto cleanup;
   }
 
-  if (translate(vm_file_path, infile, outfile) != 0) {
+  if (translate("Test", infile, outfile) != 0) {
     fprintf(stderr, "translating %s: %s", vm_file_path, error_get());
   }
 
