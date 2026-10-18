@@ -96,10 +96,6 @@ typedef struct {
   size_t capacity;
 } TokenList;
 
-static void tokenlist_append(Arena *arena, TokenList *tl, Token token) {
-  arena_da_append(arena, tl, token);
-}
-
 typedef struct {
   TokenMapEntry *builtin_tokens;
 } Lexer;
@@ -161,7 +157,7 @@ static int lexer_tokenize(Lexer *lexer, Arena *arena, size_t vm_line_len,
     if (res != 0) {
       return -1;
     }
-    tokenlist_append(arena, out_tokens, token);
+    arena_da_append(arena, out_tokens, token);
 
     i += len;
     len = 0;
@@ -268,74 +264,33 @@ static int parser_read_eol(Parser *p) {
   return 0;
 }
 
-// Maximum number of digit a string converted from size_t can have.
-#define SIZE_T_STR_MAX_DIGITS 21
-
-// Convert size_t to string.
-static int to_str(size_t num, size_t str_size,
-                  char str[static SIZE_T_STR_MAX_DIGITS]) {
-  int n = snprintf(str, str_size, "%zu", num);
-  if (n < 0 || (size_t)n >= str_size) {
-    error_set("error converting int to str: %zu", num);
-    return -1;
-  }
-  return 0;
-}
-
 #define TEMP_ADDR 5
 
-static int parser_translate_push_cmd(Parser *p, CommandPush cmd, String *out) {
-  // TODO: validate size of `index`
-  // max number of digit for 64-bit uint
-  char index_str[SIZE_T_STR_MAX_DIGITS];
-  int res = to_str(cmd.index, sizeof(index_str), index_str);
-  if (res < 0) {
-    return -1;
-  }
-
+static int parser_translate_push_cmd(Parser *p, Arena *arena, CommandPush cmd,
+                                     char **out) {
   switch (cmd.segment) {
   case MS_ARGUMENT:
-    s_append(out, "@ARG\nD=M\n@");
-    s_append(out, index_str);
-    s_append(out, "\nA=D+A\nD=M\n");
-    s_append(out, hack_asm_push);
+    *out = arena_sprintf(arena, "@ARG\nD=M\n@%zu\nA=D+A\nD=M\n%s", cmd.index,
+                         hack_asm_push);
     return 0;
   case MS_LOCAL:
-    s_append(out, "@LCL\nD=M\n@");
-    s_append(out, index_str);
-    s_append(out, "\nA=D+A\nD=M\n");
-    s_append(out, hack_asm_push);
+    *out = arena_sprintf(arena, "@LCL\nD=M\n@%zu\nA=D+A\nD=M\n%s", cmd.index,
+                         hack_asm_push);
     return 0;
   case MS_STATIC:
-    String symbol = s_new();
-    s_append(&symbol, p->_file_name);
-    s_append(&symbol, ".");
-    s_append(&symbol, index_str);
-
-    s_append(out, "@");
-    s_append(out, symbol.data);
-    s_append(out, "\nD=M\n");
-    s_append(out, hack_asm_push);
-
-    s_destroy(&symbol);
+    *out = arena_sprintf(arena, "@%s.%zu\nD=M\n%s", p->_file_name, cmd.index,
+                         hack_asm_push);
     return 0;
   case MS_CONSTANT:
-    s_append(out, "@");
-    s_append(out, index_str);
-    s_append(out, "\nD=A\n");
-    s_append(out, hack_asm_push);
+    *out = arena_sprintf(arena, "@%zu\nD=A\n%s", cmd.index, hack_asm_push);
     return 0;
   case MS_THIS:
-    s_append(out, "@THIS\nD=M\n@");
-    s_append(out, index_str);
-    s_append(out, "\nA=D+A\nD=M\n");
-    s_append(out, hack_asm_push);
+    *out = arena_sprintf(arena, "@THIS\nD=M\n@%zu\nA=D+A\nD=M\n%s", cmd.index,
+                         hack_asm_push);
     return 0;
   case MS_THAT:
-    s_append(out, "@THAT\nD=M\n@");
-    s_append(out, index_str);
-    s_append(out, "\nA=D+A\nD=M\n");
-    s_append(out, hack_asm_push);
+    *out = arena_sprintf(arena, "@THAT\nD=M\n@%zu\nA=D+A\nD=M\n%s", cmd.index,
+                         hack_asm_push);
     return 0;
   case MS_POINTER:
     if (cmd.index != 0 && cmd.index != 1) {
@@ -344,28 +299,20 @@ static int parser_translate_push_cmd(Parser *p, CommandPush cmd, String *out) {
           cmd.index);
     }
 
-    if (cmd.index == 0) {
-      s_append(out, "@THIS\nD=M\n");
-    } else {
-      s_append(out, "@THAT\nD=M\n");
-    }
-    s_append(out, hack_asm_push);
+    const char *copy_this_reg_data = "@THIS\nD=M\n";
+    const char *copy_that_reg_data = "@THAT\nD=M\n";
+    const char *copy_reg_data =
+        cmd.index == 0 ? copy_this_reg_data : copy_that_reg_data;
+    *out = arena_sprintf(arena, "%s%s", copy_reg_data, hack_asm_push);
     return 0;
   case MS_TEMP:
-    char addr_str[SIZE_T_STR_MAX_DIGITS];
-    res = to_str(TEMP_ADDR + cmd.index, sizeof(addr_str), addr_str);
-    if (res < 0) {
-      return -1;
-    }
-
-    s_append(out, "@");
-    s_append(out, addr_str);
-    s_append(out, "\nD=M\n");
-    s_append(out, hack_asm_push);
+    *out = arena_sprintf(arena, "@%zu\nD=M\n%s", TEMP_ADDR + cmd.index,
+                         hack_asm_push);
     return 0;
   }
 
-  return -1;
+  fputs("unknown state reached", stderr);
+  exit(-1);
 }
 
 typedef struct {
@@ -375,30 +322,22 @@ typedef struct {
 
 static const char *hack_asm_pop = "@SP\nAM=M-1\nD=M\n";
 
-static int parser_translate_pop_cmd(Parser *p, CommandPop cmd,
-                                    String *out_hack) {
-
-  char index_str[SIZE_T_STR_MAX_DIGITS];
-  int res = to_str(cmd.index, sizeof(index_str), index_str);
-  if (res < 0) {
-    return -1;
-  }
+static int parser_translate_pop_cmd(Parser *p, Arena *arena, CommandPop cmd,
+                                    char **out_hack) {
 
   switch (cmd.segment) {
   case MS_LOCAL:
-    s_append(out_hack, "@");
-    s_append(out_hack, index_str);
-    s_append(out_hack, "\nD=A\n@LCL\nD=D+M\n@R13\nM=D\n");
-    s_append(out_hack, hack_asm_pop);
-    s_append(out_hack, "@R13\nA=M\nM=D\n");
+    *out_hack = arena_sprintf(
+        arena, "@%zu\nD=A\n@LCL\nD=D+M\n@R13\nM=D\n%s@R13\nA=M\nM=D\n",
+        cmd.index, hack_asm_pop);
     return 0;
   default:
     return error_set("unsupported segment: %d", cmd.segment);
   }
 }
 
-static int parser_parse(Parser *p, const TokenList *tokens, String *out_hack) {
-  s_clear(out_hack);
+static int parser_parse(Parser *p, Arena *arena, const TokenList *tokens,
+                        char **out_hack) {
   if (tokens->count == 0) {
     return 0;
   }
@@ -421,7 +360,7 @@ static int parser_parse(Parser *p, const TokenList *tokens, String *out_hack) {
       return -1;
     }
 
-    res = parser_translate_push_cmd(p, cmd, out_hack);
+    res = parser_translate_push_cmd(p, arena, cmd, out_hack);
     if (res < 0) {
       return -1;
     }
@@ -446,7 +385,7 @@ static int parser_parse(Parser *p, const TokenList *tokens, String *out_hack) {
       return -1;
     }
 
-    res = parser_translate_pop_cmd(p, cmd, out_hack);
+    res = parser_translate_pop_cmd(p, arena, cmd, out_hack);
     if (res < 0) {
       return -1;
     }
@@ -466,8 +405,7 @@ static int parser_parse(Parser *p, const TokenList *tokens, String *out_hack) {
     // in the D register.
     const char *hack_assembly_add =
         "@SP\nA=M\nD=M\n@SP\nM=M-1\n@SP\nA=M\nD=D+M\n@SP\nM=M-1\n";
-    s_set(out_hack, hack_assembly_add, strlen(hack_assembly_add));
-    s_append(out_hack, hack_asm_push);
+    *out_hack = arena_sprintf(arena, "%s%s", hack_assembly_add, hack_asm_push);
     return 0;
   }
 
@@ -497,6 +435,10 @@ static int readline(FILE *fp, String *s) {
   return 0;
 }
 
+/**
+ * Translate the given VM language stream into Hack Assembly and write
+ * the output to the given destination.
+ */
 int translate(const char *in_file_name, FILE *in, FILE *out) {
   Arena scratch = {0};
   Lexer lexer = {0};
@@ -504,11 +446,10 @@ int translate(const char *in_file_name, FILE *in, FILE *out) {
   Parser p;
   parser_init(&p, in_file_name);
   String line = s_new();
-  String hack = s_new();
   int retval = -1;
 
   while (true) {
-    s_clear(&line);
+    char *hack = nullptr;
     int res = readline(in, &line);
     if (res == EOF)
       break;
@@ -523,21 +464,22 @@ int translate(const char *in_file_name, FILE *in, FILE *out) {
     if (tokens.count == 0)
       continue;
 
-    res = parser_parse(&p, &tokens, &hack);
+    res = parser_parse(&p, &scratch, &tokens, &hack);
     if (res < 0) {
       fputs(error_get(), stderr);
       goto cleanup;
     }
 
-    // TODO: handle error
-    fwrite(hack.data, sizeof(char), hack.len, out);
+    if (fputs(hack, out) == EOF && ferror(out)) {
+      perror("cannot write to destination");
+      goto cleanup;
+    }
 
     arena_reset(&scratch);
   }
   retval = 0;
 
 cleanup:
-  s_destroy(&hack);
   s_destroy(&line);
   lexer_deinit(&lexer);
   arena_free(&scratch);
