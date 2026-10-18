@@ -135,6 +135,10 @@ static int resolve_word(Lexer *lexer, Arena *arena, const char *word,
   return error_set("unknown word '%s'", word);
 }
 
+/**
+ * Convert the given VM code into a list of tokens. Memories for both the list
+ * and the elements will be allocated from the given arena allocator.
+ */
 static int lexer_tokenize(Lexer *lexer, Arena *arena, size_t vm_line_len,
                           const char vm_line[vm_line_len],
                           TokenList *out_tokens) {
@@ -459,9 +463,25 @@ static int parser_parse(Parser *p, Arena *arena, const TokenList *tokens,
 
     // pop the top two value of the stack, add them together and put the result
     // in the D register.
-    const char *hack_assembly_add =
-        "@SP\nA=M\nD=M\n@SP\nM=M-1\n@SP\nA=M\nD=D+M\n@SP\nM=M-1\n";
+    const char *hack_assembly_add = "@SP\nAM=M-1\nD=M\n@SP\nAM=M-1\nD=D+M\n";
     *out_hack = arena_sprintf(arena, "%s%s", hack_assembly_add, hack_asm_push);
+    return 0;
+  }
+
+  if (p->tokens->items[p->cur].kind == TK_SUB) {
+    p->cur++;
+
+    int res = parser_read_eol(p);
+    if (res < 0) {
+      return -1;
+    }
+
+    // pop the top two value of the stack,  and put the result
+    // in the D register.
+    const char *hack_assembly_subtract =
+        "@SP\nAM=M-1\nD=M\n@SP\nAM=M-1\nD=M-D\n";
+    *out_hack =
+        arena_sprintf(arena, "%s%s", hack_assembly_subtract, hack_asm_push);
     return 0;
   }
 
@@ -509,6 +529,8 @@ int translate(const char *in_file_name, FILE *in, FILE *out) {
     int res = readline(in, &line);
     if (res == EOF)
       break;
+    if (line.len == 0)
+      continue;
 
     TokenList tokens = {0};
     res = lexer_tokenize(&lexer, &scratch, line.len, line.data, &tokens);

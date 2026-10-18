@@ -209,15 +209,25 @@ void test_translate() {
                     {
                         .vm_code = "add\n",
                         .expected_hack = "@SP\n"
-                                         "A=M\n"
+                                         "AM=M-1\n"
                                          "D=M\n"
                                          "@SP\n"
-                                         "M=M-1\n"
-                                         "@SP\n"
-                                         "A=M\n"
+                                         "AM=M-1\n"
                                          "D=D+M\n"
                                          "@SP\n"
-                                         "M=M-1\n"
+                                         "A=M\n"
+                                         "M=D\n"
+                                         "@SP\n"
+                                         "M=M+1\n",
+                    },
+                    {
+                        .vm_code = "sub\n",
+                        .expected_hack = "@SP\n"
+                                         "AM=M-1\n"
+                                         "D=M\n"
+                                         "@SP\n"
+                                         "AM=M-1\n"
+                                         "D=M-D\n"
                                          "@SP\n"
                                          "A=M\n"
                                          "M=D\n"
@@ -241,6 +251,10 @@ void test_translate() {
                                          "M=D\n"
                                          "@SP\n"
                                          "M=M+1\n",
+                    },
+                    {
+                        .vm_code = "             ",
+                        .expected_hack = "",
                     }};
   size_t test_case_len = sizeof(test_cases) / sizeof(test_cases[0]);
 
