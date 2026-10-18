@@ -39,6 +39,7 @@ typedef enum {
   TK_THAT,
   TK_TEMP,
   TK_STATIC,
+  TK_POINTER,
   TK_NUMBER,
 } TokenKind;
 
@@ -77,6 +78,7 @@ TokenMapEntry *tm_create(void) {
   shput(retval, "that", token_create(TK_THAT));
   shput(retval, "static", token_create(TK_STATIC));
   shput(retval, "temp", token_create(TK_TEMP));
+  shput(retval, "pointer", token_create(TK_POINTER));
   return retval;
 }
 
@@ -142,6 +144,12 @@ static int lexer_tokenize(Lexer *lexer, Arena *arena, size_t vm_line_len,
   while (i < vm_line_len) {
     while (i < vm_line_len && isspace(vm_line[i]))
       i++;
+
+    // Ignore the rest of the line if '//' is encountered.
+    if (i + 1 < vm_line_len && vm_line[i] == '/' && vm_line[i + 1] == '/') {
+      break;
+    }
+
     while (i + len < vm_line_len && !isspace(vm_line[i + len]))
       len++;
     if (len == 0) {
@@ -196,7 +204,6 @@ static void parser_init(Parser *p, const char *file_name) {
 
 // Hack Assembly code which pushes the value stored inside the D register
 // into the stack.
-// TODO: how to check for stack overflow?
 static const char *hack_asm_push = "@SP\nA=M\nM=D\n@SP\nM=M+1\n";
 
 static int parser_read_segment(Parser *p, MemorySegment *out_ms) {
@@ -231,6 +238,10 @@ static int parser_read_segment(Parser *p, MemorySegment *out_ms) {
   }
   case TK_STATIC: {
     *out_ms = MS_STATIC;
+    break;
+  }
+  case TK_POINTER: {
+    *out_ms = MS_POINTER;
     break;
   }
   default: {
@@ -357,7 +368,8 @@ static int parser_translate_pop_cmd(Parser *p, Arena *arena, CommandPop cmd,
     return 0;
   }
   case MS_TEMP: {
-    *out_hack = arena_sprintf(arena, "%s@%zu\nM=D\n", hack_asm_pop, cmd.index);
+    *out_hack = arena_sprintf(arena, "%s@%zu\nM=D\n", hack_asm_pop,
+                              TEMP_ADDR + cmd.index);
     return 0;
   }
   case MS_POINTER: {

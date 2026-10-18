@@ -12,39 +12,236 @@ void test_translate() {
   struct {
     const char *vm_code;
     const char *expected_hack;
-  } test_cases[] = {
-      {
-          .vm_code = "push constant 7\n",
-          .expected_hack = "@7\n"
-                           "D=A\n"
-                           "@SP\n"
-                           "A=M\n"
-                           "M=D\n"
-                           "@SP\n"
-                           "M=M+1\n",
-      },
-      {
-          .vm_code = "add\n",
-          .expected_hack = "@SP\n"
-                           "A=M\n"
-                           "D=M\n"
-                           "@SP\n"
-                           "M=M-1\n"
-                           "@SP\n"
-                           "A=M\n"
-                           "D=D+M\n"
-                           "@SP\n"
-                           "M=M-1\n"
-                           "@SP\n"
-                           "A=M\n"
-                           "M=D\n"
-                           "@SP\n"
-                           "M=M+1\n",
-      },
-      {.vm_code = "pop local 2",
-       .expected_hack = "@2\nD=A\n@LCL\nD=D+M\n@R13\nM=D\n@SP\nAM=M-1\nD=M\n@"
-                        "R13\nA=M\nM=D\n"},
-  };
+  } test_cases[] = {{
+                        .vm_code = "push constant 7\n",
+                        .expected_hack = "@7\n"
+                                         "D=A\n"
+                                         "@SP\n"
+                                         "A=M\n"
+                                         "M=D\n"
+                                         "@SP\n"
+                                         "M=M+1\n",
+                    },
+                    {
+                        .vm_code = "push local 2\n",
+                        .expected_hack = "@LCL\n"
+                                         "D=M\n"
+                                         "@2\n"
+                                         "A=D+A\n"
+                                         "D=M\n"
+                                         "@SP\n"
+                                         "A=M\n"
+                                         "M=D\n"
+                                         "@SP\n"
+                                         "M=M+1\n",
+                    },
+                    {
+                        .vm_code = "pop local 2\n",
+                        .expected_hack = "@2\n"
+                                         "D=A\n"
+                                         "@LCL\n"
+                                         "D=D+M\n"
+                                         "@R13\n"
+                                         "M=D\n"
+                                         "@SP\n"
+                                         "AM=M-1\n"
+                                         "D=M\n"
+                                         "@R13\n"
+                                         "A=M\n"
+                                         "M=D\n",
+                    },
+                    {
+                        .vm_code = "push argument 1\n",
+                        .expected_hack = "@ARG\n"
+                                         "D=M\n"
+                                         "@1\n"
+                                         "A=D+A\n"
+                                         "D=M\n"
+                                         "@SP\n"
+                                         "A=M\n"
+                                         "M=D\n"
+                                         "@SP\n"
+                                         "M=M+1\n",
+                    },
+                    {
+                        .vm_code = "pop argument 1\n",
+                        .expected_hack = "@1\n"
+                                         "D=A\n"
+                                         "@ARG\n"
+                                         "D=D+M\n"
+                                         "@R13\n"
+                                         "M=D\n"
+                                         "@SP\n"
+                                         "AM=M-1\n"
+                                         "D=M\n"
+                                         "@R13\n"
+                                         "A=M\n"
+                                         "M=D\n",
+                    },
+                    {
+                        .vm_code = "push this 3\n",
+                        .expected_hack = "@THIS\n"
+                                         "D=M\n"
+                                         "@3\n"
+                                         "A=D+A\n"
+                                         "D=M\n"
+                                         "@SP\n"
+                                         "A=M\n"
+                                         "M=D\n"
+                                         "@SP\n"
+                                         "M=M+1\n",
+                    },
+                    {
+                        .vm_code = "pop this 3\n",
+                        .expected_hack = "@3\n"
+                                         "D=A\n"
+                                         "@THIS\n"
+                                         "D=D+M\n"
+                                         "@R13\n"
+                                         "M=D\n"
+                                         "@SP\n"
+                                         "AM=M-1\n"
+                                         "D=M\n"
+                                         "@R13\n"
+                                         "A=M\n"
+                                         "M=D\n",
+                    },
+                    {
+                        .vm_code = "push that 4\n",
+                        .expected_hack = "@THAT\n"
+                                         "D=M\n"
+                                         "@4\n"
+                                         "A=D+A\n"
+                                         "D=M\n"
+                                         "@SP\n"
+                                         "A=M\n"
+                                         "M=D\n"
+                                         "@SP\n"
+                                         "M=M+1\n",
+                    },
+                    {
+                        .vm_code = "pop that 4\n",
+                        .expected_hack = "@4\n"
+                                         "D=A\n"
+                                         "@THAT\n"
+                                         "D=D+M\n"
+                                         "@R13\n"
+                                         "M=D\n"
+                                         "@SP\n"
+                                         "AM=M-1\n"
+                                         "D=M\n"
+                                         "@R13\n"
+                                         "A=M\n"
+                                         "M=D\n",
+                    },
+                    {
+                        .vm_code = "push temp 6\n",
+                        .expected_hack = "@11\n"
+                                         "D=M\n"
+                                         "@SP\n"
+                                         "A=M\n"
+                                         "M=D\n"
+                                         "@SP\n"
+                                         "M=M+1\n",
+                    },
+                    {
+                        .vm_code = "pop temp 6\n",
+                        .expected_hack = "@SP\n"
+                                         "AM=M-1\n"
+                                         "D=M\n"
+                                         "@11\n"
+                                         "M=D\n",
+                    },
+                    {
+                        .vm_code = "push pointer 0\n",
+                        .expected_hack = "@THIS\n"
+                                         "D=M\n"
+                                         "@SP\n"
+                                         "A=M\n"
+                                         "M=D\n"
+                                         "@SP\n"
+                                         "M=M+1\n",
+                    },
+                    {
+                        .vm_code = "push pointer 1\n",
+                        .expected_hack = "@THAT\n"
+                                         "D=M\n"
+                                         "@SP\n"
+                                         "A=M\n"
+                                         "M=D\n"
+                                         "@SP\n"
+                                         "M=M+1\n",
+                    },
+                    {
+                        .vm_code = "pop pointer 0\n",
+                        .expected_hack = "@SP\n"
+                                         "AM=M-1\n"
+                                         "D=M\n"
+                                         "@THIS\n"
+                                         "M=D\n",
+                    },
+                    {
+                        .vm_code = "pop pointer 1\n",
+                        .expected_hack = "@SP\n"
+                                         "AM=M-1\n"
+                                         "D=M\n"
+                                         "@THAT\n"
+                                         "M=D\n",
+                    },
+                    {
+                        .vm_code = "push static 5\n",
+                        .expected_hack = "@Test.5\n"
+                                         "D=M\n"
+                                         "@SP\n"
+                                         "A=M\n"
+                                         "M=D\n"
+                                         "@SP\n"
+                                         "M=M+1\n",
+                    },
+                    {
+                        .vm_code = "pop static 5\n",
+                        .expected_hack = "@SP\n"
+                                         "AM=M-1\n"
+                                         "D=M\n"
+                                         "@Test.5\n"
+                                         "M=D\n",
+                    },
+                    {
+                        .vm_code = "add\n",
+                        .expected_hack = "@SP\n"
+                                         "A=M\n"
+                                         "D=M\n"
+                                         "@SP\n"
+                                         "M=M-1\n"
+                                         "@SP\n"
+                                         "A=M\n"
+                                         "D=D+M\n"
+                                         "@SP\n"
+                                         "M=M-1\n"
+                                         "@SP\n"
+                                         "A=M\n"
+                                         "M=D\n"
+                                         "@SP\n"
+                                         "M=M+1\n",
+                    },
+                    {
+                        .vm_code = "",
+                        .expected_hack = "",
+                    },
+                    {
+                        .vm_code = "// comment",
+                        .expected_hack = "",
+                    },
+                    {
+                        .vm_code = "   push     constant 999 //comment    \n",
+                        .expected_hack = "@999\n"
+                                         "D=A\n"
+                                         "@SP\n"
+                                         "A=M\n"
+                                         "M=D\n"
+                                         "@SP\n"
+                                         "M=M+1\n",
+                    }};
   size_t test_case_len = sizeof(test_cases) / sizeof(test_cases[0]);
 
   for (size_t i = 0; i < test_case_len; i++) {
