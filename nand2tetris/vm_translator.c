@@ -1,4 +1,3 @@
-#include "../dynamic_string.h"
 #include <ctype.h>
 #include <stdarg.h>
 #include <stddef.h>
@@ -490,11 +489,18 @@ static int parser_parse(Parser *p, Arena *arena, const TokenList *tokens,
 }
 
 /**
- * @brief Read a line from a file stream into a String.
+ * @brief Read a line from a file stream into `out`. Memories will be allocated
+ * from the given arena allocator.
  * @return EOF (-1) if we reached EOF and no data were read. 0 otherwise.
  */
-static int readline(FILE *fp, String *s) {
-  s_clear(s);
+static int readline(FILE *fp, Arena *arena, char **out, size_t *out_len) {
+  struct StringBuilder {
+    char *items;
+    size_t count;
+    size_t capacity;
+  };
+
+  struct StringBuilder sb = {0};
 
   int ch;
   while (true) {
@@ -502,12 +508,15 @@ static int readline(FILE *fp, String *s) {
     if (ch == '\n' || ch == EOF) {
       break;
     }
-    s_appendc(s, ch);
+    arena_da_append(arena, &sb, ch);
   }
 
-  if (s->len == 0 && ch == EOF)
+  if (sb.count == 0 && ch == EOF)
     return EOF;
 
+  arena_da_append(arena, &sb, '\0');
+  *out = sb.items;
+  *out_len = sb.count - 1;
   return 0;
 }
 
@@ -521,19 +530,20 @@ int translate(const char *in_file_name, FILE *in, FILE *out) {
   lexer_init(&lexer);
   Parser p;
   parser_init(&p, in_file_name);
-  String line = s_new();
   int retval = -1;
 
   while (true) {
+    char *line = nullptr;
+    size_t line_len = 0;
     char *hack = nullptr;
-    int res = readline(in, &line);
+    int res = readline(in, &scratch, &line, &line_len);
     if (res == EOF)
       break;
-    if (line.len == 0)
+    if (line_len == 0)
       continue;
 
     TokenList tokens = {0};
-    res = lexer_tokenize(&lexer, &scratch, line.len, line.data, &tokens);
+    res = lexer_tokenize(&lexer, &scratch, line_len, line, &tokens);
     if (res < 0) {
       fputs(error_get(), stderr);
       goto cleanup;
@@ -558,7 +568,6 @@ int translate(const char *in_file_name, FILE *in, FILE *out) {
   retval = 0;
 
 cleanup:
-  s_destroy(&line);
   lexer_deinit(&lexer);
   arena_free(&scratch);
   return retval;
