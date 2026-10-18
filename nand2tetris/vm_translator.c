@@ -205,30 +205,37 @@ static int parser_read_segment(Parser *p, MemorySegment *out_ms) {
   }
 
   switch (p->tokens->items[p->cur].kind) {
-
-  case TK_CONSTANT:
+  case TK_CONSTANT: {
     *out_ms = MS_CONSTANT;
     break;
-  case TK_LOCAL:
+  }
+  case TK_LOCAL: {
     *out_ms = MS_LOCAL;
     break;
-  case TK_ARGUMENT:
+  }
+  case TK_ARGUMENT: {
     *out_ms = MS_ARGUMENT;
     break;
-  case TK_THIS:
+  }
+  case TK_THIS: {
     *out_ms = MS_THIS;
     break;
-  case TK_THAT:
+  }
+  case TK_THAT: {
     *out_ms = MS_THAT;
     break;
-  case TK_TEMP:
+  }
+  case TK_TEMP: {
     *out_ms = MS_TEMP;
     break;
-  case TK_STATIC:
+  }
+  case TK_STATIC: {
     *out_ms = MS_STATIC;
     break;
-  default:
+  }
+  default: {
     return error_set("expected memory segment at token %zu", p->cur + 1);
+  }
   }
 
   p->cur++;
@@ -269,50 +276,52 @@ static int parser_read_eol(Parser *p) {
 static int parser_translate_push_cmd(Parser *p, Arena *arena, CommandPush cmd,
                                      char **out) {
   switch (cmd.segment) {
-  case MS_ARGUMENT:
+  case MS_ARGUMENT: {
     *out = arena_sprintf(arena, "@ARG\nD=M\n@%zu\nA=D+A\nD=M\n%s", cmd.index,
                          hack_asm_push);
     return 0;
-  case MS_LOCAL:
+  }
+  case MS_LOCAL: {
     *out = arena_sprintf(arena, "@LCL\nD=M\n@%zu\nA=D+A\nD=M\n%s", cmd.index,
                          hack_asm_push);
     return 0;
-  case MS_STATIC:
+  }
+  case MS_STATIC: {
     *out = arena_sprintf(arena, "@%s.%zu\nD=M\n%s", p->_file_name, cmd.index,
                          hack_asm_push);
     return 0;
-  case MS_CONSTANT:
+  }
+  case MS_CONSTANT: {
     *out = arena_sprintf(arena, "@%zu\nD=A\n%s", cmd.index, hack_asm_push);
     return 0;
-  case MS_THIS:
+  }
+  case MS_THIS: {
     *out = arena_sprintf(arena, "@THIS\nD=M\n@%zu\nA=D+A\nD=M\n%s", cmd.index,
                          hack_asm_push);
     return 0;
-  case MS_THAT:
+  }
+  case MS_THAT: {
     *out = arena_sprintf(arena, "@THAT\nD=M\n@%zu\nA=D+A\nD=M\n%s", cmd.index,
                          hack_asm_push);
     return 0;
-  case MS_POINTER:
+  }
+  case MS_POINTER: {
     if (cmd.index != 0 && cmd.index != 1) {
       return error_set(
           "error invalid index for pointer segment: expect 0 or 1, got %zu",
           cmd.index);
     }
 
-    const char *copy_this_reg_data = "@THIS\nD=M\n";
-    const char *copy_that_reg_data = "@THAT\nD=M\n";
-    const char *copy_reg_data =
-        cmd.index == 0 ? copy_this_reg_data : copy_that_reg_data;
-    *out = arena_sprintf(arena, "%s%s", copy_reg_data, hack_asm_push);
+    const char *src_addr = cmd.index == 0 ? "THIS" : "THAT";
+    *out = arena_sprintf(arena, "@%s\nD=M\n%s", src_addr, hack_asm_push);
     return 0;
-  case MS_TEMP:
+  }
+  case MS_TEMP: {
     *out = arena_sprintf(arena, "@%zu\nD=M\n%s", TEMP_ADDR + cmd.index,
                          hack_asm_push);
     return 0;
   }
-
-  fputs("unknown state reached", stderr);
-  exit(-1);
+  }
 }
 
 typedef struct {
@@ -327,15 +336,50 @@ static int parser_translate_pop_cmd(Parser *p, Arena *arena, CommandPop cmd,
 
   switch (cmd.segment) {
   case MS_LOCAL:
+  case MS_ARGUMENT:
+  case MS_THIS:
+  case MS_THAT: {
+    const char *dest_addr;
+    if (cmd.segment == MS_LOCAL)
+      dest_addr = "LCL";
+    else if (cmd.segment == MS_ARGUMENT)
+      dest_addr = "ARG";
+    else if (cmd.segment == MS_THIS)
+      dest_addr = "THIS";
+    else if (cmd.segment == MS_THAT)
+      dest_addr = "THAT";
+    else
+      return -1;
+
     *out_hack = arena_sprintf(
-        arena, "@%zu\nD=A\n@LCL\nD=D+M\n@R13\nM=D\n%s@R13\nA=M\nM=D\n",
-        cmd.index, hack_asm_pop);
+        arena, "@%zu\nD=A\n@%s\nD=D+M\n@R13\nM=D\n%s@R13\nA=M\nM=D\n",
+        cmd.index, dest_addr, hack_asm_pop);
     return 0;
-  default:
+  }
+  case MS_TEMP: {
+    *out_hack = arena_sprintf(arena, "%s@%zu\nM=D\n", hack_asm_pop, cmd.index);
+    return 0;
+  }
+  case MS_POINTER: {
+    const char *dest_addr = cmd.index == 0 ? "THIS" : "THAT";
+    *out_hack = arena_sprintf(arena, "%s@%s\nM=D\n", hack_asm_pop, dest_addr);
+    return 0;
+  }
+  case MS_STATIC: {
+    *out_hack = arena_sprintf(arena, "%s@%s.%zu\nM=D\n", hack_asm_pop,
+                              p->_file_name, cmd.index);
+    return 0;
+  }
+  default: {
     return error_set("unsupported segment: %d", cmd.segment);
+  }
   }
 }
 
+/**
+ * Parse the list of tokens into a Hack Assembly string. Its memory will be
+ * allocated from the given arena allocator.
+ */
 static int parser_parse(Parser *p, Arena *arena, const TokenList *tokens,
                         char **out_hack) {
   if (tokens->count == 0) {
