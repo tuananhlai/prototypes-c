@@ -75,7 +75,9 @@ char *arena_strdup(Arena *a, const char *cstr);
 void *arena_memdup(Arena *a, void *data, size_t size);
 void *arena_memcpy(void *dest, const void *src, size_t n);
 #ifndef ARENA_NOSTDIO
+[[gnu::format(printf, 2, 3)]]
 char *arena_sprintf(Arena *a, const char *format, ...);
+[[gnu::format(printf, 2, 0)]]
 char *arena_vsprintf(Arena *a, const char *format, va_list args);
 #endif // ARENA_NOSTDIO
 
