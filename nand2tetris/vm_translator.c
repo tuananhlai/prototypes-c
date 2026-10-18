@@ -284,7 +284,7 @@ static int to_str(size_t num, size_t str_size,
 
 #define TEMP_ADDR 5
 
-static int command_push_translate(Parser *p, CommandPush cmd, String *out) {
+static int parser_translate_push_cmd(Parser *p, CommandPush cmd, String *out) {
   // TODO: validate size of `index`
   // max number of digit for 64-bit uint
   char index_str[SIZE_T_STR_MAX_DIGITS];
@@ -368,6 +368,35 @@ static int command_push_translate(Parser *p, CommandPush cmd, String *out) {
   return -1;
 }
 
+typedef struct {
+  MemorySegment segment;
+  size_t index;
+} CommandPop;
+
+static const char *hack_asm_pop = "@SP\nAM=M-1\nD=M\n";
+
+static int parser_translate_pop_cmd(Parser *p, CommandPop cmd,
+                                    String *out_hack) {
+
+  char index_str[SIZE_T_STR_MAX_DIGITS];
+  int res = to_str(cmd.index, sizeof(index_str), index_str);
+  if (res < 0) {
+    return -1;
+  }
+
+  switch (cmd.segment) {
+  case MS_LOCAL:
+    s_append(out_hack, "@");
+    s_append(out_hack, index_str);
+    s_append(out_hack, "\nD=A\n@LCL\nD=D+M\n@R13\nM=D\n");
+    s_append(out_hack, hack_asm_pop);
+    s_append(out_hack, "@R13\nA=M\nM=D\n");
+    return 0;
+  default:
+    return error_set("unsupported segment: %d", cmd.segment);
+  }
+}
+
 static int parser_parse(Parser *p, const TokenList *tokens, String *out_hack) {
   s_clear(out_hack);
   if (tokens->count == 0) {
@@ -392,7 +421,32 @@ static int parser_parse(Parser *p, const TokenList *tokens, String *out_hack) {
       return -1;
     }
 
-    res = command_push_translate(p, cmd, out_hack);
+    res = parser_translate_push_cmd(p, cmd, out_hack);
+    if (res < 0) {
+      return -1;
+    }
+
+    return 0;
+  }
+
+  if (p->tokens->items[p->cur].kind == TK_POP) {
+    p->cur++;
+
+    CommandPop cmd = {0};
+    int res = parser_read_segment(p, &cmd.segment);
+    if (res < 0)
+      return -1;
+
+    res = parser_read_number(p, &cmd.index);
+    if (res < 0)
+      return -1;
+
+    res = parser_read_eol(p);
+    if (res < 0) {
+      return -1;
+    }
+
+    res = parser_translate_pop_cmd(p, cmd, out_hack);
     if (res < 0) {
       return -1;
     }

@@ -41,6 +41,9 @@ void test_translate() {
                            "@SP\n"
                            "M=M+1\n",
       },
+      {.vm_code = "pop local 2",
+       .expected_hack = "@2\nD=A\n@LCL\nD=D+M\n@R13\nM=D\n@SP\nAM=M-1\nD=M\n@"
+                        "R13\nA=M\nM=D\n"},
   };
   size_t test_case_len = sizeof(test_cases) / sizeof(test_cases[0]);
 
