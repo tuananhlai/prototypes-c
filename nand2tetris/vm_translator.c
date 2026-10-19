@@ -31,6 +31,13 @@ typedef enum {
   TK_POP,
   TK_ADD,
   TK_SUB,
+  TK_NEG,
+  TK_EQ,
+  TK_GT,
+  TK_LT,
+  TK_AND,
+  TK_OR,
+  TK_NOT,
   TK_CONSTANT,
   TK_LOCAL,
   TK_ARGUMENT,
@@ -70,6 +77,13 @@ TokenMapEntry *tm_create(void) {
   shput(retval, "pop", token_create(TK_POP));
   shput(retval, "add", token_create(TK_ADD));
   shput(retval, "sub", token_create(TK_SUB));
+  shput(retval, "neg", token_create(TK_NEG));
+  shput(retval, "eq", token_create(TK_EQ));
+  shput(retval, "gt", token_create(TK_GT));
+  shput(retval, "lt", token_create(TK_LT));
+  shput(retval, "and", token_create(TK_AND));
+  shput(retval, "or", token_create(TK_OR));
+  shput(retval, "not", token_create(TK_NOT));
   shput(retval, "constant", token_create(TK_CONSTANT));
   shput(retval, "local", token_create(TK_LOCAL));
   shput(retval, "argument", token_create(TK_ARGUMENT));
@@ -181,6 +195,7 @@ typedef struct {
   size_t cur;
   const TokenList *tokens;
   const char *_file_name;
+  size_t _label_idx;
 } Parser;
 
 typedef enum {
@@ -203,6 +218,7 @@ static void parser_init(Parser *p, const char *file_name) {
   p->cur = 0;
   p->tokens = nullptr;
   p->_file_name = file_name;
+  p->_label_idx = 0;
 }
 
 // Hack Assembly code which pushes the value stored inside the D register
@@ -391,6 +407,10 @@ static int parser_translate_pop_cmd(Parser *p, Arena *arena, CommandPop cmd,
   }
 }
 
+static const char *parser_gen_label(Parser *p, Arena *arena) {
+  return arena_sprintf(arena, "L%zu", p->_label_idx++);
+}
+
 /**
  * Parse the list of tokens into a Hack Assembly string. Its memory will be
  * allocated from the given arena allocator.
@@ -475,12 +495,54 @@ static int parser_parse(Parser *p, Arena *arena, const TokenList *tokens,
       return -1;
     }
 
-    // pop the top two value of the stack,  and put the result
-    // in the D register.
     const char *hack_assembly_subtract =
         "@SP\nAM=M-1\nD=M\n@SP\nAM=M-1\nD=M-D\n";
     *out_hack =
         arena_sprintf(arena, "%s%s", hack_assembly_subtract, hack_asm_push);
+    return 0;
+  }
+
+  if (p->tokens->items[p->cur].kind == TK_NEG) {
+    p->cur++;
+
+    int res = parser_read_eol(p);
+    if (res < 0) {
+      return -1;
+    }
+
+    const char *hack_assembly_neg = "@SP\nAM=M-1\nD=-M\n";
+    *out_hack = arena_sprintf(arena, "%s%s", hack_assembly_neg, hack_asm_push);
+    return 0;
+  }
+
+  if (p->tokens->items[p->cur].kind == TK_EQ) {
+    p->cur++;
+
+    const char *true_label = parser_gen_label(p, arena);
+    const char *push_label = parser_gen_label(p, arena);
+
+    int res = parser_read_eol(p);
+    if (res < 0) {
+      return -1;
+    }
+
+    const char *hack_assembly_eq =
+        arena_sprintf(arena,
+                      "@SP\n"
+                      "AM=M-1\n"
+                      "D=M\n"
+                      "@SP\n"
+                      "AM=M-1\n"
+                      "D=D-M\n"
+                      "@%s\n" // true
+                      "D;JEQ\n"
+                      "@%s\n" // push
+                      "D=0;JMP\n"
+                      "(%s)\n" // true
+                      "D=1\n"
+                      "(%s)\n", // push
+                      true_label, push_label, true_label, push_label);
+    *out_hack = arena_sprintf(arena, "%s%s", hack_assembly_eq, hack_asm_push);
     return 0;
   }
 
