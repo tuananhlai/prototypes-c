@@ -242,6 +242,70 @@ void test_translate() {
                                          "M=M+1\n",
                     },
                     {
+                        .vm_code = "gt\n",
+                        .expected_hack = "@SP\n"
+                                         "AM=M-1\n"
+                                         "D=M\n"
+                                         "@SP\n"
+                                         "AM=M-1\n"
+                                         "D=D-M\n"
+                                         "@L0\n"
+                                         "D;JGT\n"
+                                         "@L1\n"
+                                         "D=0;JMP\n"
+                                         "(L0)\n"
+                                         "D=1\n"
+                                         "(L1)\n"
+                                         "@SP\n"
+                                         "A=M\n"
+                                         "M=D\n"
+                                         "@SP\n"
+                                         "M=M+1\n",
+                    },
+                    {
+                        .vm_code = "lt\n",
+                        .expected_hack = "@SP\n"
+                                         "AM=M-1\n"
+                                         "D=M\n"
+                                         "@SP\n"
+                                         "AM=M-1\n"
+                                         "D=D-M\n"
+                                         "@L0\n"
+                                         "D;JLT\n"
+                                         "@L1\n"
+                                         "D=0;JMP\n"
+                                         "(L0)\n"
+                                         "D=1\n"
+                                         "(L1)\n"
+                                         "@SP\n"
+                                         "A=M\n"
+                                         "M=D\n"
+                                         "@SP\n"
+                                         "M=M+1\n",
+                    },
+                    {
+                        .vm_code = "not\n",
+                        .expected_hack = "@SP\n"
+                                         "AM=M-1\n"
+                                         "D=!M\n"
+                                         "@SP\n"
+                                         "A=M\n"
+                                         "M=D\n"
+                                         "@SP\n"
+                                         "M=M+1\n",
+                    },
+                    {
+                        .vm_code = "neg\n",
+                        .expected_hack = "@SP\n"
+                                         "AM=M-1\n"
+                                         "D=-M\n"
+                                         "@SP\n"
+                                         "A=M\n"
+                                         "M=D\n"
+                                         "@SP\n"
+                                         "M=M+1\n",
+                    },
+                    {
                         .vm_code = "sub\n",
                         .expected_hack = "@SP\n"
                                          "AM=M-1\n"
