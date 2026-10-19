@@ -541,12 +541,11 @@ static int parser_parse(Parser *p, Arena *arena, const TokenList *tokens,
     else if (cur_token_kind == TK_LT)
       conditional_jmp = "JLT";
     else {
-      return error_set(
-          "process comparison expression: unknown token kind %d",
-          cur_token_kind);
+      return error_set("process comparison expression: unknown token kind %d",
+                       cur_token_kind);
     }
 
-    const char *hack_assembly_eq = arena_sprintf(
+    const char *hack_assembly_compare = arena_sprintf(
         arena,
         "@SP\n"
         "AM=M-1\n"
@@ -562,7 +561,33 @@ static int parser_parse(Parser *p, Arena *arena, const TokenList *tokens,
         "D=1\n"
         "(%s)\n", // push
         true_label, conditional_jmp, push_label, true_label, push_label);
-    *out_hack = arena_sprintf(arena, "%s%s", hack_assembly_eq, hack_asm_push);
+    *out_hack =
+        arena_sprintf(arena, "%s%s", hack_assembly_compare, hack_asm_push);
+    return 0;
+  }
+
+  if (cur_token_kind == TK_AND || cur_token_kind == TK_OR) {
+    p->cur++;
+
+    int res = parser_read_eol(p);
+    if (res < 0) {
+      return -1;
+    }
+
+    const char *set_data_reg_cmd;
+    if (cur_token_kind == TK_AND)
+      set_data_reg_cmd = "D=D&M";
+    else if (cur_token_kind == TK_OR)
+      set_data_reg_cmd = "D=D|M";
+    else
+      return error_set(
+          "process binary boolean expression: unknown token kind %d",
+          cur_token_kind);
+
+    const char *hack_assembly_calc = arena_sprintf(
+        arena, "@SP\nAM=M-1\nD=M\n@SP\nAM=M-1\n%s\n@L0\nD;JEQ\nD=1\n(L0)\n",
+        set_data_reg_cmd);
+    *out_hack = arena_sprintf(arena, "%s%s", hack_assembly_calc, hack_asm_push);
     return 0;
   }
 

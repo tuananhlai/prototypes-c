@@ -320,6 +320,42 @@ void test_translate() {
                                          "M=M+1\n",
                     },
                     {
+                        .vm_code = "and\n",
+                        .expected_hack = "@SP\n"
+                                         "AM=M-1\n"
+                                         "D=M\n"
+                                         "@SP\n"
+                                         "AM=M-1\n"
+                                         "D=D&M\n"
+                                         "@L0\n"
+                                         "D;JEQ\n"
+                                         "D=1\n"
+                                         "(L0)\n"
+                                         "@SP\n"
+                                         "A=M\n"
+                                         "M=D\n"
+                                         "@SP\n"
+                                         "M=M+1\n",
+                    },
+                    {
+                        .vm_code = "or\n",
+                        .expected_hack = "@SP\n"
+                                         "AM=M-1\n"
+                                         "D=M\n"
+                                         "@SP\n"
+                                         "AM=M-1\n"
+                                         "D=D|M\n"
+                                         "@L0\n"
+                                         "D;JEQ\n"
+                                         "D=1\n"
+                                         "(L0)\n"
+                                         "@SP\n"
+                                         "A=M\n"
+                                         "M=D\n"
+                                         "@SP\n"
+                                         "M=M+1\n",
+                    },
+                    {
                         .vm_code = "",
                         .expected_hack = "",
                     },
