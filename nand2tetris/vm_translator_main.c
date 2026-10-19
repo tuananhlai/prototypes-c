@@ -52,7 +52,7 @@ int main(int argc, char *argv[argc]) {
     return EXIT_FAILURE;
   }
 
-  Arena scratch;
+  Arena scratch = {0};
   const char *vm_file_path = argv[1];
   char *vm_file_dir = nullptr;
   char *vm_file_name = nullptr;

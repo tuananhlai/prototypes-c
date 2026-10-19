@@ -557,13 +557,13 @@ static int parser_parse(Parser *p, Arena *arena, const TokenList *tokens,
                       "D=M\n"
                       "@SP\n"
                       "AM=M-1\n"
-                      "D=D-M\n"
+                      "D=M-D\n"
                       "@%s\n"  // push true
                       "D;%s\n" // conditional jump command
                       "@%s\n"  // push false
-                      "D=-1;JMP\n"
+                      "D=0;JMP\n"
                       "(%s)\n" // push true
-                      "D=0\n"
+                      "D=-1\n"
                       "(%s)\n", // push false
                       push_true_label, conditional_jmp, push_false_label,
                       push_true_label, push_false_label);
