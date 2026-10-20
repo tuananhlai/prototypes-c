@@ -35,11 +35,11 @@ void path_basename(const char *file_path, Arena *arena, char **basename) {
   path_split(file_path, arena, nullptr, &file_name);
   size_t n = strlen(file_name);
   size_t dot_idx = n;
-  // FIXME
-  while (dot_idx > 0 && file_name[dot_idx - 1] != '.') {
-    dot_idx--;
+
+  // . does not indicate extension if it was the first character.
+  for (size_t i = 1; i < n; i++) {
+    if (file_name[i] == '.') dot_idx = i;
   }
-  dot_idx--;
 
   *basename = arena_alloc(arena, dot_idx);
   (*basename)[dot_idx] = '\0';
