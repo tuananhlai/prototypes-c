@@ -227,13 +227,13 @@ void test_translate() {
                                          "D=M\n"
                                          "@SP\n"
                                          "AM=M-1\n"
-                                         "D=D-M\n"
+                                         "D=M-D\n"
                                          "@L0\n"
                                          "D;JEQ\n"
                                          "@L1\n"
                                          "D=0;JMP\n"
                                          "(L0)\n"
-                                         "D=1\n"
+                                         "D=-1\n"
                                          "(L1)\n"
                                          "@SP\n"
                                          "A=M\n"
@@ -248,13 +248,13 @@ void test_translate() {
                                          "D=M\n"
                                          "@SP\n"
                                          "AM=M-1\n"
-                                         "D=D-M\n"
+                                         "D=M-D\n"
                                          "@L0\n"
                                          "D;JGT\n"
                                          "@L1\n"
                                          "D=0;JMP\n"
                                          "(L0)\n"
-                                         "D=1\n"
+                                         "D=-1\n"
                                          "(L1)\n"
                                          "@SP\n"
                                          "A=M\n"
@@ -269,13 +269,13 @@ void test_translate() {
                                          "D=M\n"
                                          "@SP\n"
                                          "AM=M-1\n"
-                                         "D=D-M\n"
+                                         "D=M-D\n"
                                          "@L0\n"
                                          "D;JLT\n"
                                          "@L1\n"
                                          "D=0;JMP\n"
                                          "(L0)\n"
-                                         "D=1\n"
+                                         "D=-1\n"
                                          "(L1)\n"
                                          "@SP\n"
                                          "A=M\n"
@@ -346,6 +346,23 @@ void test_translate() {
                                          "M=D\n"
                                          "@SP\n"
                                          "M=M+1\n",
+                    },
+                    {
+                        .vm_code = "label TEST\n",
+                        .expected_hack = "(TEST)\n",
+                    },
+                    {
+                        .vm_code = "goto TEST\n",
+                        .expected_hack = "@TEST\n"
+                                         "0;JMP\n",
+                    },
+                    {
+                        .vm_code = "if-goto TEST\n",
+                        .expected_hack = "@SP\n"
+                                         "AM=M-1\n"
+                                         "D=M\n"
+                                         "@TEST\n"
+                                         "D;JNE\n",
                     },
                     {
                         .vm_code = "",

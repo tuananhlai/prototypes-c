@@ -47,6 +47,10 @@ typedef enum {
   TK_STATIC,
   TK_POINTER,
   TK_NUMBER,
+  TK_LABEL,
+  TK_IFGOTO,
+  TK_GOTO,
+  TK_SYMBOL,
 } TokenKind;
 
 typedef struct {
@@ -92,6 +96,9 @@ TokenMapEntry *tm_create(void) {
   shput(retval, "static", token_create(TK_STATIC));
   shput(retval, "temp", token_create(TK_TEMP));
   shput(retval, "pointer", token_create(TK_POINTER));
+  shput(retval, "label", token_create(TK_LABEL));
+  shput(retval, "if-goto", token_create(TK_IFGOTO));
+  shput(retval, "goto", token_create(TK_GOTO));
   return retval;
 }
 
@@ -119,33 +126,35 @@ static void lexer_init(Lexer *lexer) { lexer->builtin_tokens = tm_create(); }
 
 static void lexer_deinit(Lexer *lexer) { tm_destroy(lexer->builtin_tokens); }
 
-static int resolve_word(Lexer *lexer, Arena *arena, const char *word,
-                        Token *out_token) {
-  size_t n = strlen(word);
+static int resolve_word(Lexer *lexer, Arena *arena, size_t n,
+                        const char word[n], Token *out_token) {
   if (n == 0) {
     return error_set("empty word");
   }
 
-  const Token *builtin_token = tm_get(lexer->builtin_tokens, word);
+  char *key = arena_alloc(arena, n + 1);
+  memcpy(key, word, n);
+  key[n] = '\0';
+
+  const Token *builtin_token = tm_get(lexer->builtin_tokens, key);
   if (builtin_token) {
     *out_token = *builtin_token;
     return 0;
   }
 
+  // TODO: do I really need to copy word?
   if (isdigit(word[0])) {
     for (size_t i = 1; i < n; i++) {
       if (!isdigit(word[i]))
         return error_set("invalid number '%s'", word);
     }
-
-    char *val = arena_alloc(arena, sizeof(char) * n);
-    memcpy(val, word, n);
-    *out_token = token_create3(TK_NUMBER, n, val);
-
+    *out_token = token_create3(TK_NUMBER, n, word);
     return 0;
   }
 
-  return error_set("unknown word '%s'", word);
+  // TODO: what does a valid symbol look like?
+  *out_token = token_create3(TK_SYMBOL, n, word);
+  return 0;
 }
 
 /**
@@ -173,12 +182,8 @@ static int lexer_tokenize(Lexer *lexer, Arena *arena, size_t vm_line_len,
       break;
     }
 
-    char word[len + 1];
-    memcpy(word, vm_line + i, len);
-    word[len] = '\0';
-
     Token token = {0};
-    int res = resolve_word(lexer, arena, word, &token);
+    int res = resolve_word(lexer, arena, len, vm_line + i, &token);
     if (res != 0) {
       return -1;
     }
@@ -298,6 +303,20 @@ static int parser_read_eol(Parser *p) {
                      p->tokens->items[p->cur].kind);
   }
 
+  return 0;
+}
+
+static int parser_read_symbol(Parser *p, size_t *n, const char **symbol) {
+  if (p->cur >= p->tokens->count)
+    return error_set("expected symbol, got end of line");
+  if (p->tokens->items[p->cur].kind != TK_SYMBOL) {
+    return error_set("expect symbol at token %zu", p->cur);
+  }
+
+  Token cur = p->tokens->items[p->cur];
+  *n = cur.val_len;
+  *symbol = cur.val;
+  p->cur++;
   return 0;
 }
 
@@ -569,6 +588,69 @@ static int parser_parse(Parser *p, Arena *arena, const TokenList *tokens,
                       push_true_label, push_false_label);
     *out_hack =
         arena_sprintf(arena, "%s%s", hack_assembly_compare, hack_asm_push);
+    return 0;
+  }
+
+  if (cur_token_kind == TK_LABEL) {
+    p->cur++;
+
+    size_t n = 0;
+    const char *symbol = nullptr;
+    int res = parser_read_symbol(p, &n, &symbol);
+    if (res < 0) {
+      return -1;
+    }
+
+    res = parser_read_eol(p);
+    if (res < 0) {
+      return -1;
+    }
+
+    *out_hack = arena_sprintf(arena, "(%*s)\n", (int)n, symbol);
+    return 0;
+  }
+
+  if (cur_token_kind == TK_GOTO) {
+    p->cur++;
+
+    size_t n = 0;
+    const char *symbol = nullptr;
+    int res = parser_read_symbol(p, &n, &symbol);
+    if (res < 0) {
+      return -1;
+    }
+
+    res = parser_read_eol(p);
+    if (res < 0) {
+      return -1;
+    }
+
+    *out_hack = arena_sprintf(arena, "@%*s\n0;JMP\n", (int)n, symbol);
+    return 0;
+  }
+
+  if (cur_token_kind == TK_IFGOTO) {
+    p->cur++;
+
+    size_t n = 0;
+    const char *symbol = nullptr;
+    int res = parser_read_symbol(p, &n, &symbol);
+    if (res < 0) {
+      return -1;
+    }
+
+    res = parser_read_eol(p);
+    if (res < 0) {
+      return -1;
+    }
+
+    *out_hack = arena_sprintf(arena,
+                              "@SP\n"
+                              "AM=M-1\n"
+                              "D=M\n"
+                              "@%*s\n"
+                              "D;JNE\n",
+                              (int)n, symbol);
     return 0;
   }
 
