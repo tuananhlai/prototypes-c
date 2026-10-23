@@ -126,17 +126,25 @@ static void lexer_init(Lexer *lexer) { lexer->builtin_tokens = tm_create(); }
 
 static void lexer_deinit(Lexer *lexer) { tm_destroy(lexer->builtin_tokens); }
 
+static const Token *lexer_get_builtin_token(Lexer *lexer, Arena *arena,
+                                            size_t n, const char word[n]) {
+  // Allocate memory for the null-terminated map key. Free it immediately after usage.
+  Arena_Mark mark = arena_snapshot(arena);
+  char *key = arena_alloc(arena, n + 1);
+  memcpy(key, word, n);
+  key[n] = '\0';
+  const Token *builtin_token = tm_get(lexer->builtin_tokens, key);
+  arena_rewind(arena, mark);
+  return builtin_token;
+}
+
 static int resolve_word(Lexer *lexer, Arena *arena, size_t n,
                         const char word[n], Token *out_token) {
   if (n == 0) {
     return error_set("empty word");
   }
 
-  char *key = arena_alloc(arena, n + 1);
-  memcpy(key, word, n);
-  key[n] = '\0';
-
-  const Token *builtin_token = tm_get(lexer->builtin_tokens, key);
+  const Token *builtin_token = lexer_get_builtin_token(lexer, arena, n, word);
   if (builtin_token) {
     *out_token = *builtin_token;
     return 0;
