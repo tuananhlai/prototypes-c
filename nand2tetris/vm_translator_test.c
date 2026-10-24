@@ -10,10 +10,12 @@
 
 void test_translate() {
   struct {
+    const char *name;
     const char *vm_code;
     const char *expected_hack;
   } test_cases[] = {
       {
+          .name = "should translate 'push constant'",
           .vm_code = "push constant 7\n",
           .expected_hack = "@7\n"
                            "D=A\n"
@@ -24,6 +26,7 @@ void test_translate() {
                            "M=M+1\n",
       },
       {
+          .name = "should translate 'push local'",
           .vm_code = "push local 2\n",
           .expected_hack = "@LCL\n"
                            "D=M\n"
@@ -37,6 +40,7 @@ void test_translate() {
                            "M=M+1\n",
       },
       {
+          .name = "should translate 'pop local'",
           .vm_code = "pop local 2\n",
           .expected_hack = "@2\n"
                            "D=A\n"
@@ -52,6 +56,7 @@ void test_translate() {
                            "M=D\n",
       },
       {
+          .name = "should translate 'push argument'",
           .vm_code = "push argument 1\n",
           .expected_hack = "@ARG\n"
                            "D=M\n"
@@ -65,6 +70,7 @@ void test_translate() {
                            "M=M+1\n",
       },
       {
+          .name = "should translate 'pop argument'",
           .vm_code = "pop argument 1\n",
           .expected_hack = "@1\n"
                            "D=A\n"
@@ -80,6 +86,7 @@ void test_translate() {
                            "M=D\n",
       },
       {
+          .name = "should translate 'push this'",
           .vm_code = "push this 3\n",
           .expected_hack = "@THIS\n"
                            "D=M\n"
@@ -93,6 +100,7 @@ void test_translate() {
                            "M=M+1\n",
       },
       {
+          .name = "should translate 'pop this'",
           .vm_code = "pop this 3\n",
           .expected_hack = "@3\n"
                            "D=A\n"
@@ -108,6 +116,7 @@ void test_translate() {
                            "M=D\n",
       },
       {
+          .name = "should translate 'push that'",
           .vm_code = "push that 4\n",
           .expected_hack = "@THAT\n"
                            "D=M\n"
@@ -121,6 +130,7 @@ void test_translate() {
                            "M=M+1\n",
       },
       {
+          .name = "should translate 'pop that'",
           .vm_code = "pop that 4\n",
           .expected_hack = "@4\n"
                            "D=A\n"
@@ -136,6 +146,7 @@ void test_translate() {
                            "M=D\n",
       },
       {
+          .name = "should translate 'push temp'",
           .vm_code = "push temp 6\n",
           .expected_hack = "@11\n"
                            "D=M\n"
@@ -146,6 +157,7 @@ void test_translate() {
                            "M=M+1\n",
       },
       {
+          .name = "should translate 'pop temp'",
           .vm_code = "pop temp 6\n",
           .expected_hack = "@SP\n"
                            "AM=M-1\n"
@@ -154,6 +166,7 @@ void test_translate() {
                            "M=D\n",
       },
       {
+          .name = "should translate 'push pointer 0'",
           .vm_code = "push pointer 0\n",
           .expected_hack = "@THIS\n"
                            "D=M\n"
@@ -164,6 +177,7 @@ void test_translate() {
                            "M=M+1\n",
       },
       {
+          .name = "should translate 'push pointer 1'",
           .vm_code = "push pointer 1\n",
           .expected_hack = "@THAT\n"
                            "D=M\n"
@@ -174,6 +188,7 @@ void test_translate() {
                            "M=M+1\n",
       },
       {
+          .name = "should translate 'pop pointer 0'",
           .vm_code = "pop pointer 0\n",
           .expected_hack = "@SP\n"
                            "AM=M-1\n"
@@ -182,6 +197,7 @@ void test_translate() {
                            "M=D\n",
       },
       {
+          .name = "should translate 'pop pointer 1'",
           .vm_code = "pop pointer 1\n",
           .expected_hack = "@SP\n"
                            "AM=M-1\n"
@@ -190,6 +206,7 @@ void test_translate() {
                            "M=D\n",
       },
       {
+          .name = "should translate 'push static'",
           .vm_code = "push static 5\n",
           .expected_hack = "@Test.5\n"
                            "D=M\n"
@@ -200,6 +217,7 @@ void test_translate() {
                            "M=M+1\n",
       },
       {
+          .name = "should translate 'pop static'",
           .vm_code = "pop static 5\n",
           .expected_hack = "@SP\n"
                            "AM=M-1\n"
@@ -208,6 +226,7 @@ void test_translate() {
                            "M=D\n",
       },
       {
+          .name = "should translate 'add'",
           .vm_code = "add\n",
           .expected_hack = "@SP\n"
                            "AM=M-1\n"
@@ -222,6 +241,7 @@ void test_translate() {
                            "M=M+1\n",
       },
       {
+          .name = "should translate 'eq'",
           .vm_code = "eq\n",
           .expected_hack = "@SP\n"
                            "AM=M-1\n"
@@ -243,6 +263,7 @@ void test_translate() {
                            "M=M+1\n",
       },
       {
+          .name = "should translate 'gt'",
           .vm_code = "gt\n",
           .expected_hack = "@SP\n"
                            "AM=M-1\n"
@@ -264,6 +285,7 @@ void test_translate() {
                            "M=M+1\n",
       },
       {
+          .name = "should translate 'lt'",
           .vm_code = "lt\n",
           .expected_hack = "@SP\n"
                            "AM=M-1\n"
@@ -285,6 +307,7 @@ void test_translate() {
                            "M=M+1\n",
       },
       {
+          .name = "should translate 'not'",
           .vm_code = "not\n",
           .expected_hack = "@SP\n"
                            "AM=M-1\n"
@@ -296,6 +319,7 @@ void test_translate() {
                            "M=M+1\n",
       },
       {
+          .name = "should translate 'neg'",
           .vm_code = "neg\n",
           .expected_hack = "@SP\n"
                            "AM=M-1\n"
@@ -307,6 +331,7 @@ void test_translate() {
                            "M=M+1\n",
       },
       {
+          .name = "should translate 'sub'",
           .vm_code = "sub\n",
           .expected_hack = "@SP\n"
                            "AM=M-1\n"
@@ -321,6 +346,7 @@ void test_translate() {
                            "M=M+1\n",
       },
       {
+          .name = "should translate 'and'",
           .vm_code = "and\n",
           .expected_hack = "@SP\n"
                            "AM=M-1\n"
@@ -335,6 +361,7 @@ void test_translate() {
                            "M=M+1\n",
       },
       {
+          .name = "should translate 'or'",
           .vm_code = "or\n",
           .expected_hack = "@SP\n"
                            "AM=M-1\n"
@@ -349,24 +376,24 @@ void test_translate() {
                            "M=M+1\n",
       },
       {
+          .name = "should translate 'label'",
           .vm_code = "label TEST\n",
           .expected_hack = "(TEST)\n",
       },
       {
+          .name = "should translate 'goto'",
           .vm_code = "goto TEST\n",
           .expected_hack = "@TEST\n"
                            "0;JMP\n",
       },
       {
           // regression test for incorrect format specifier (%*s vs %.*s)
-          .vm_code = "if-goto TEST // comment\n",
-          .expected_hack = "@SP\n"
-                           "AM=M-1\n"
-                           "D=M\n"
-                           "@TEST\n"
-                           "D;JNE\n",
+          .name = "should not include comment in Hack ASM output",
+          .vm_code = "label TEST // comment\n",
+          .expected_hack = "(TEST)\n",
       },
       {
+          .name = "should translate 'if-goto'",
           .vm_code = "if-goto TEST\n",
           .expected_hack = "@SP\n"
                            "AM=M-1\n"
@@ -375,14 +402,17 @@ void test_translate() {
                            "D;JNE\n",
       },
       {
+          .name = "should output nothing for empty input",
           .vm_code = "",
           .expected_hack = "",
       },
       {
+          .name = "should ignore comment line",
           .vm_code = "// comment",
           .expected_hack = "",
       },
       {
+          .name = "should ignore extra whitespaces",
           .vm_code = "   push     constant 999 //comment    \n",
           .expected_hack = "@999\n"
                            "D=A\n"
@@ -393,6 +423,8 @@ void test_translate() {
                            "M=M+1\n",
       },
       {
+          .name =
+              "should output nothing for line with only whitespace characters",
           .vm_code = "             ",
           .expected_hack = "",
       }};
@@ -416,7 +448,7 @@ void test_translate() {
     }
 
     if (!TEST_CHECK_(strcmp(out_buf, test_cases[i].expected_hack) == 0,
-                     "[case %zu] output matches expected", i)) {
+                     "%s", test_cases[i].name)) {
       TEST_MSG("expected:\n%s", test_cases[i].expected_hack);
       TEST_MSG("actual:\n%s", out_buf);
     }
