@@ -51,6 +51,8 @@ typedef enum {
   TK_IFGOTO,
   TK_GOTO,
   TK_SYMBOL,
+  TK_FUNCTION,
+  TK_RETURN,
 } TokenKind;
 
 typedef struct {
@@ -99,6 +101,8 @@ TokenMapEntry *tm_create(void) {
   shput(retval, "label", token_create(TK_LABEL));
   shput(retval, "if-goto", token_create(TK_IFGOTO));
   shput(retval, "goto", token_create(TK_GOTO));
+  shput(retval, "function", token_create(TK_FUNCTION));
+  shput(retval, "return", token_create(TK_RETURN));
   return retval;
 }
 
@@ -614,7 +618,7 @@ static int parser_parse(Parser *p, Arena *arena, const TokenList *tokens,
       return -1;
     }
 
-    *out_hack = arena_sprintf(arena, "(%*s)\n", (int)n, symbol);
+    *out_hack = arena_sprintf(arena, "(%.*s)\n", (int)n, symbol);
     return 0;
   }
 
@@ -633,7 +637,7 @@ static int parser_parse(Parser *p, Arena *arena, const TokenList *tokens,
       return -1;
     }
 
-    *out_hack = arena_sprintf(arena, "@%*s\n0;JMP\n", (int)n, symbol);
+    *out_hack = arena_sprintf(arena, "@%.*s\n0;JMP\n", (int)n, symbol);
     return 0;
   }
 
@@ -656,7 +660,7 @@ static int parser_parse(Parser *p, Arena *arena, const TokenList *tokens,
                               "@SP\n"
                               "AM=M-1\n"
                               "D=M\n"
-                              "@%*s\n"
+                              "@%.*s\n"
                               "D;JNE\n",
                               (int)n, symbol);
     return 0;
