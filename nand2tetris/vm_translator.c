@@ -53,6 +53,7 @@ typedef enum {
   TK_SYMBOL,
   TK_FUNCTION,
   TK_RETURN,
+  TK_CALL,
 } TokenKind;
 
 typedef struct {
@@ -103,6 +104,7 @@ TokenMapEntry *tm_create(void) {
   shput(retval, "goto", token_create(TK_GOTO));
   shput(retval, "function", token_create(TK_FUNCTION));
   shput(retval, "return", token_create(TK_RETURN));
+  shput(retval, "call", token_create(TK_CALL));
   return retval;
 }
 
@@ -132,7 +134,8 @@ static void lexer_deinit(Lexer *lexer) { tm_destroy(lexer->builtin_tokens); }
 
 static const Token *lexer_get_builtin_token(Lexer *lexer, Arena *arena,
                                             size_t n, const char word[n]) {
-  // Allocate memory for the null-terminated map key. Free it immediately after usage.
+  // Allocate memory for the null-terminated map key. Free it immediately after
+  // usage.
   Arena_Mark mark = arena_snapshot(arena);
   char *key = arena_alloc(arena, n + 1);
   memcpy(key, word, n);
@@ -235,12 +238,13 @@ static void parser_init(Parser *p, const char *file_name) {
   p->cur = 0;
   p->tokens = nullptr;
   p->_file_name = file_name;
+  // TODO: prevent collision with user label
   p->_label_idx = 0;
 }
 
 // Hack Assembly code which pushes the value stored inside the D register
 // into the stack.
-static const char *hack_asm_push = "@SP\nA=M\nM=D\n@SP\nM=M+1\n";
+static const char *hack_asm_push = "@SP\nAM=M+1\nA=A-1\nM=D\n";
 
 static int parser_read_segment(Parser *p, MemorySegment *out_ms) {
   if (p->cur >= p->tokens->count) {
@@ -318,7 +322,8 @@ static int parser_read_eol(Parser *p) {
   return 0;
 }
 
-static int parser_read_symbol(Parser *p, size_t *n, const char **symbol) {
+static int parser_read_symbol(Parser *p, size_t *out_n,
+                              const char **out_symbol) {
   if (p->cur >= p->tokens->count)
     return error_set("expected symbol, got end of line");
   if (p->tokens->items[p->cur].kind != TK_SYMBOL) {
@@ -326,8 +331,8 @@ static int parser_read_symbol(Parser *p, size_t *n, const char **symbol) {
   }
 
   Token cur = p->tokens->items[p->cur];
-  *n = cur.val_len;
-  *symbol = cur.val;
+  *out_n = cur.val_len;
+  *out_symbol = cur.val;
   p->cur++;
   return 0;
 }
@@ -446,8 +451,8 @@ static const char *parser_gen_label(Parser *p, Arena *arena) {
  * Parse the list of tokens into a Hack Assembly string. Its memory will be
  * allocated from the given arena allocator.
  */
-static int parser_parse(Parser *p, Arena *arena, const TokenList *tokens,
-                        char **out_hack) {
+static int parser_parse_line(Parser *p, Arena *arena, const TokenList *tokens,
+                             char **out_hack) {
   if (tokens->count == 0) {
     return 0;
   }
@@ -666,6 +671,27 @@ static int parser_parse(Parser *p, Arena *arena, const TokenList *tokens,
     return 0;
   }
 
+  if (cur_token_kind == TK_CALL) {
+    p->cur++;
+
+    size_t n = 0;
+    const char *symbol = nullptr;
+    int res = parser_read_symbol(p, &n, &symbol);
+    if (res < 0)
+      return -1;
+
+    size_t n_args = 0;
+    res = parser_read_number(p, &n_args);
+    if (res < 0)
+      return -1;
+
+    res = parser_read_eol(p);
+    if (res < 0)
+      return -1;
+
+    // TODO: finish the implementation.
+  }
+
   return error_set("unsupported command (token kind %d)",
                    p->tokens->items[0].kind);
 }
@@ -734,7 +760,7 @@ int translate(const char *in_file_name, FILE *in, FILE *out) {
     if (tokens.count == 0)
       continue;
 
-    res = parser_parse(&p, &scratch, &tokens, &hack);
+    res = parser_parse_line(&p, &scratch, &tokens, &hack);
     if (res < 0) {
       fputs(error_get(), stderr);
       goto cleanup;

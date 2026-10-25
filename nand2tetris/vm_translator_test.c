@@ -20,10 +20,9 @@ void test_translate() {
           .expected_hack = "@7\n"
                            "D=A\n"
                            "@SP\n"
-                           "A=M\n"
-                           "M=D\n"
-                           "@SP\n"
-                           "M=M+1\n",
+                           "AM=M+1\n"
+                           "A=A-1\n"
+                           "M=D\n",
       },
       {
           .name = "should translate 'push local'",
@@ -34,10 +33,9 @@ void test_translate() {
                            "A=D+A\n"
                            "D=M\n"
                            "@SP\n"
-                           "A=M\n"
-                           "M=D\n"
-                           "@SP\n"
-                           "M=M+1\n",
+                           "AM=M+1\n"
+                           "A=A-1\n"
+                           "M=D\n",
       },
       {
           .name = "should translate 'pop local'",
@@ -64,10 +62,9 @@ void test_translate() {
                            "A=D+A\n"
                            "D=M\n"
                            "@SP\n"
-                           "A=M\n"
-                           "M=D\n"
-                           "@SP\n"
-                           "M=M+1\n",
+                           "AM=M+1\n"
+                           "A=A-1\n"
+                           "M=D\n",
       },
       {
           .name = "should translate 'pop argument'",
@@ -94,10 +91,9 @@ void test_translate() {
                            "A=D+A\n"
                            "D=M\n"
                            "@SP\n"
-                           "A=M\n"
-                           "M=D\n"
-                           "@SP\n"
-                           "M=M+1\n",
+                           "AM=M+1\n"
+                           "A=A-1\n"
+                           "M=D\n",
       },
       {
           .name = "should translate 'pop this'",
@@ -124,10 +120,9 @@ void test_translate() {
                            "A=D+A\n"
                            "D=M\n"
                            "@SP\n"
-                           "A=M\n"
-                           "M=D\n"
-                           "@SP\n"
-                           "M=M+1\n",
+                           "AM=M+1\n"
+                           "A=A-1\n"
+                           "M=D\n",
       },
       {
           .name = "should translate 'pop that'",
@@ -151,10 +146,9 @@ void test_translate() {
           .expected_hack = "@11\n"
                            "D=M\n"
                            "@SP\n"
-                           "A=M\n"
-                           "M=D\n"
-                           "@SP\n"
-                           "M=M+1\n",
+                           "AM=M+1\n"
+                           "A=A-1\n"
+                           "M=D\n",
       },
       {
           .name = "should translate 'pop temp'",
@@ -171,10 +165,9 @@ void test_translate() {
           .expected_hack = "@THIS\n"
                            "D=M\n"
                            "@SP\n"
-                           "A=M\n"
-                           "M=D\n"
-                           "@SP\n"
-                           "M=M+1\n",
+                           "AM=M+1\n"
+                           "A=A-1\n"
+                           "M=D\n",
       },
       {
           .name = "should translate 'push pointer 1'",
@@ -182,10 +175,9 @@ void test_translate() {
           .expected_hack = "@THAT\n"
                            "D=M\n"
                            "@SP\n"
-                           "A=M\n"
-                           "M=D\n"
-                           "@SP\n"
-                           "M=M+1\n",
+                           "AM=M+1\n"
+                           "A=A-1\n"
+                           "M=D\n",
       },
       {
           .name = "should translate 'pop pointer 0'",
@@ -211,10 +203,9 @@ void test_translate() {
           .expected_hack = "@Test.5\n"
                            "D=M\n"
                            "@SP\n"
-                           "A=M\n"
-                           "M=D\n"
-                           "@SP\n"
-                           "M=M+1\n",
+                           "AM=M+1\n"
+                           "A=A-1\n"
+                           "M=D\n",
       },
       {
           .name = "should translate 'pop static'",
@@ -235,10 +226,9 @@ void test_translate() {
                            "AM=M-1\n"
                            "D=D+M\n"
                            "@SP\n"
-                           "A=M\n"
-                           "M=D\n"
-                           "@SP\n"
-                           "M=M+1\n",
+                           "AM=M+1\n"
+                           "A=A-1\n"
+                           "M=D\n",
       },
       {
           .name = "should translate 'eq'",
@@ -257,10 +247,9 @@ void test_translate() {
                            "D=-1\n"
                            "(L1)\n"
                            "@SP\n"
-                           "A=M\n"
-                           "M=D\n"
-                           "@SP\n"
-                           "M=M+1\n",
+                           "AM=M+1\n"
+                           "A=A-1\n"
+                           "M=D\n",
       },
       {
           .name = "should translate 'gt'",
@@ -279,10 +268,9 @@ void test_translate() {
                            "D=-1\n"
                            "(L1)\n"
                            "@SP\n"
-                           "A=M\n"
-                           "M=D\n"
-                           "@SP\n"
-                           "M=M+1\n",
+                           "AM=M+1\n"
+                           "A=A-1\n"
+                           "M=D\n",
       },
       {
           .name = "should translate 'lt'",
@@ -301,10 +289,9 @@ void test_translate() {
                            "D=-1\n"
                            "(L1)\n"
                            "@SP\n"
-                           "A=M\n"
-                           "M=D\n"
-                           "@SP\n"
-                           "M=M+1\n",
+                           "AM=M+1\n"
+                           "A=A-1\n"
+                           "M=D\n",
       },
       {
           .name = "should translate 'not'",
@@ -313,10 +300,9 @@ void test_translate() {
                            "AM=M-1\n"
                            "D=!M\n"
                            "@SP\n"
-                           "A=M\n"
-                           "M=D\n"
-                           "@SP\n"
-                           "M=M+1\n",
+                           "AM=M+1\n"
+                           "A=A-1\n"
+                           "M=D\n",
       },
       {
           .name = "should translate 'neg'",
@@ -325,10 +311,9 @@ void test_translate() {
                            "AM=M-1\n"
                            "D=-M\n"
                            "@SP\n"
-                           "A=M\n"
-                           "M=D\n"
-                           "@SP\n"
-                           "M=M+1\n",
+                           "AM=M+1\n"
+                           "A=A-1\n"
+                           "M=D\n",
       },
       {
           .name = "should translate 'sub'",
@@ -340,10 +325,9 @@ void test_translate() {
                            "AM=M-1\n"
                            "D=M-D\n"
                            "@SP\n"
-                           "A=M\n"
-                           "M=D\n"
-                           "@SP\n"
-                           "M=M+1\n",
+                           "AM=M+1\n"
+                           "A=A-1\n"
+                           "M=D\n",
       },
       {
           .name = "should translate 'and'",
@@ -355,10 +339,9 @@ void test_translate() {
                            "AM=M-1\n"
                            "D=D&M\n"
                            "@SP\n"
-                           "A=M\n"
-                           "M=D\n"
-                           "@SP\n"
-                           "M=M+1\n",
+                           "AM=M+1\n"
+                           "A=A-1\n"
+                           "M=D\n",
       },
       {
           .name = "should translate 'or'",
@@ -370,10 +353,9 @@ void test_translate() {
                            "AM=M-1\n"
                            "D=D|M\n"
                            "@SP\n"
-                           "A=M\n"
-                           "M=D\n"
-                           "@SP\n"
-                           "M=M+1\n",
+                           "AM=M+1\n"
+                           "A=A-1\n"
+                           "M=D\n",
       },
       {
           .name = "should translate 'label'",
@@ -402,6 +384,51 @@ void test_translate() {
                            "D;JNE\n",
       },
       {
+          .name = "should translate 'call'",
+          .vm_code = "call Sys.main 2",
+          .expected_hack = "@Sys.main$ret.0\n" // push return address
+                           "D=A\n"
+                           "@SP\n"
+                           "AM=M+1\n"
+                           "A=A-1\n"
+                           "M=D\n"
+                           "@LCL\n" // push LCL base address
+                           "D=M\n"
+                           "@SP\n"
+                           "AM=M+1\n"
+                           "A=A-1\n"
+                           "M=D\n"
+                           "@ARG\n" // push ARG base address
+                           "D=M\n"
+                           "@SP\n"
+                           "AM=M+1\n"
+                           "A=A-1\n"
+                           "M=D\n"
+                           "@THIS\n"
+                           "D=M\n"
+                           "@SP\n"
+                           "AM=M+1\n"
+                           "A=A-1\n"
+                           "M=D\n"
+                           "@THAT\n"
+                           "D=M\n"
+                           "@SP\n"
+                           "AM=M+1\n"
+                           "A=A-1\n"
+                           "M=D\n"
+                           "@7\n"
+                           "D=A\n"
+                           "@ARG\n" // set ARG and LCL for callee
+                           "M=D-A\n"
+                           "@SP\n"
+                           "D=M\n"
+                           "@LCL\n"
+                           "M=D\n"
+                           "@Sys.main\n" // jump to the target function
+                           "0;JMP\n"
+                           "(Sys.main$ret.0)",
+      },
+      {
           .name = "should output nothing for empty input",
           .vm_code = "",
           .expected_hack = "",
@@ -417,10 +444,9 @@ void test_translate() {
           .expected_hack = "@999\n"
                            "D=A\n"
                            "@SP\n"
-                           "A=M\n"
-                           "M=D\n"
-                           "@SP\n"
-                           "M=M+1\n",
+                           "AM=M+1\n"
+                           "A=A-1\n"
+                           "M=D\n",
       },
       {
           .name =
@@ -447,8 +473,8 @@ void test_translate() {
       continue;
     }
 
-    if (!TEST_CHECK_(strcmp(out_buf, test_cases[i].expected_hack) == 0,
-                     "%s", test_cases[i].name)) {
+    if (!TEST_CHECK_(strcmp(out_buf, test_cases[i].expected_hack) == 0, "%s",
+                     test_cases[i].name)) {
       TEST_MSG("expected:\n%s", test_cases[i].expected_hack);
       TEST_MSG("actual:\n%s", out_buf);
     }
