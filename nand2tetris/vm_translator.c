@@ -447,6 +447,8 @@ static const char *parser_gen_label(Parser *p, Arena *arena) {
   return arena_sprintf(arena, "L%zu", p->_label_idx++);
 }
 
+#define FN_FRAME_SIZE 5
+
 /**
  * Parse the list of tokens into a Hack Assembly string. Its memory will be
  * allocated from the given arena allocator.
@@ -689,7 +691,52 @@ static int parser_parse_line(Parser *p, Arena *arena, const TokenList *tokens,
     if (res < 0)
       return -1;
 
-    // TODO: finish the implementation.
+    // TODO: replace with real return address.
+    const char *return_addr = "Sys.main$ret.0";
+    *out_hack = arena_sprintf(arena,
+                              "@%s\n" // push return address
+                              "D=A\n"
+                              "@SP\n"
+                              "AM=M+1\n"
+                              "A=A-1\n"
+                              "M=D\n"
+                              "@LCL\n" // push LCL base address
+                              "D=M\n"
+                              "@SP\n"
+                              "AM=M+1\n"
+                              "A=A-1\n"
+                              "M=D\n"
+                              "@ARG\n" // push ARG base address
+                              "D=M\n"
+                              "@SP\n"
+                              "AM=M+1\n"
+                              "A=A-1\n"
+                              "M=D\n"
+                              "@THIS\n"
+                              "D=M\n"
+                              "@SP\n"
+                              "AM=M+1\n"
+                              "A=A-1\n"
+                              "M=D\n"
+                              "@THAT\n"
+                              "D=M\n"
+                              "@SP\n"
+                              "AM=M+1\n"
+                              "A=A-1\n"
+                              "M=D\n"
+                              "@%zu\n"
+                              "D=A\n"
+                              "@ARG\n" // set ARG and LCL for callee
+                              "M=A-D\n"
+                              "@SP\n"
+                              "D=M\n"
+                              "@LCL\n"
+                              "M=D\n"
+                              "@%.*s\n" // jump to the target function
+                              "0;JMP\n"
+                              "(%s)",
+                              return_addr, FN_FRAME_SIZE + n_args, (int)n,
+                              symbol, return_addr);
   }
 
   return error_set("unsupported command (token kind %d)",

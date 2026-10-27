@@ -419,7 +419,7 @@ void test_translate() {
                            "@7\n"
                            "D=A\n"
                            "@ARG\n" // set ARG and LCL for callee
-                           "M=D-A\n"
+                           "M=A-D\n"
                            "@SP\n"
                            "D=M\n"
                            "@LCL\n"
@@ -427,6 +427,46 @@ void test_translate() {
                            "@Sys.main\n" // jump to the target function
                            "0;JMP\n"
                            "(Sys.main$ret.0)",
+      },
+      {
+          .name = "should translate function declaration",
+          .vm_code = "function Sys.main 2\nreturn",
+          .expected_hack = "(Sys.main)\n"
+                           "@SP\n" // push 2 local variable into the stack
+                           "AM=M+1\n"
+                           "A=A-1\n"
+                           "M=0\n"
+                           "@SP\n"
+                           "AM=M+1\n"
+                           "A=A-1\n"
+                           "M=0\n"
+                           "@2\n"    // number of local variables
+                           "D=A+1\n" // pop all local variables + the last entry
+                                     // of the latest function frame
+                           "@SP\n"
+                           "AM=M-D\n"
+                           "D=M\n"
+                           "@THAT\n"
+                           "M=D\n"
+                           "@SP\n"
+                           "AM=M-1\n"
+                           "D=M\n"
+                           "@THIS\n"
+                           "M=D\n"
+                           "@SP\n"
+                           "AM=M-1\n"
+                           "D=M\n"
+                           "@ARG\n"
+                           "M=D\n"
+                           "@SP\n"
+                           "AM=M-1\n"
+                           "D=M\n"
+                           "@LCL\n"
+                           "M=D\n"
+                           "@SP\n"
+                           "AM=M-1\n"
+                           "A=M\n"
+                           "0;JMP\n",
       },
       {
           .name = "should output nothing for empty input",
