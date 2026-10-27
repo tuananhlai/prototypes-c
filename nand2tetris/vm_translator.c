@@ -234,6 +234,147 @@ typedef struct {
   size_t index;
 } CommandPush;
 
+typedef enum {
+  CMD_PUSH,
+  CMD_POP,
+  CMD_ADD,
+  CMD_SUB,
+  CMD_AND,
+  CMD_OR,
+  CMD_NEG,
+  CMD_NOT,
+  CMD_EQ,
+  CMD_GT,
+  CMD_LT,
+  CMD_LBL,
+  CMD_GOTO,
+  CMD_IFGOTO,
+  CMD_FUNC,
+  CMD_CALL,
+  CMD_RET,
+} CommandKind;
+
+typedef struct {
+  MemorySegment segment;
+  size_t index;
+} CommandPushArgs;
+
+typedef struct {
+  MemorySegment segment;
+  size_t index;
+} CommandPopArgs;
+
+typedef struct {
+  const char *symbol;
+  size_t symbol_len;
+} CommandLblArgs;
+
+typedef struct {
+  const char *symbol;
+  size_t symbol_len;
+} CommandGotoArgs;
+
+typedef struct {
+  const char *symbol;
+  size_t symbol_len;
+} CommandIfgotoArgs;
+
+typedef struct {
+  const char *symbol;
+  size_t symbol_len;
+  size_t n_vars;
+} CommandFuncArgs;
+
+typedef struct {
+  const char *symbol;
+  size_t symbol_len;
+  size_t n_args;
+} CommandCallArgs;
+
+typedef struct {
+  CommandKind kind;
+  union {
+    CommandPushArgs push;
+    CommandPopArgs pop;
+    CommandLblArgs lbl;
+    CommandGotoArgs gotoz;
+    CommandIfgotoArgs ifgoto;
+    CommandFuncArgs func;
+    CommandCallArgs call;
+  } args;
+} Command;
+
+Command command_push_new(MemorySegment segment, size_t index) {
+  return (Command){
+      .kind = CMD_PUSH,
+      .args = {.push = {segment, index}},
+  };
+}
+
+Command command_pop_new(MemorySegment segment, size_t index) {
+  return (Command){
+      .kind = CMD_POP,
+      .args = {.pop = {segment, index}},
+  };
+}
+
+Command command_add_new(void) { return (Command){.kind = CMD_ADD}; }
+
+Command command_sub_new(void) { return (Command){.kind = CMD_SUB}; }
+
+Command command_and_new(void) { return (Command){.kind = CMD_AND}; }
+
+Command command_or_new(void) { return (Command){.kind = CMD_OR}; }
+
+Command command_neg_new(void) { return (Command){.kind = CMD_NEG}; }
+
+Command command_not_new(void) { return (Command){.kind = CMD_NOT}; }
+
+Command command_eq_new(void) { return (Command){.kind = CMD_EQ}; }
+
+Command command_gt_new(void) { return (Command){.kind = CMD_GT}; }
+
+Command command_lt_new(void) { return (Command){.kind = CMD_LT}; }
+
+Command command_lbl_new(size_t symbol_len, const char symbol[symbol_len]) {
+  return (Command){
+      .kind = CMD_LBL,
+      .args = {.lbl = {symbol, symbol_len}},
+  };
+}
+
+Command command_goto_new(size_t symbol_len, const char symbol[symbol_len]) {
+  return (Command){
+      .kind = CMD_GOTO,
+      .args = {.gotoz = {symbol, symbol_len}},
+  };
+}
+
+Command command_ifgoto_new(size_t symbol_len, const char symbol[symbol_len]) {
+  return (Command){
+      .kind = CMD_IFGOTO,
+      .args = {.ifgoto = {symbol, symbol_len}},
+  };
+}
+
+Command command_func_new(size_t symbol_len, const char symbol[symbol_len],
+                         size_t n_vars) {
+  return (Command){
+      .kind = CMD_FUNC,
+      .args = {.func = {symbol, symbol_len, n_vars}},
+  };
+}
+
+Command command_call_new(size_t symbol_len, const char symbol[symbol_len],
+                         size_t n_args) {
+  return (Command){
+      .kind = CMD_CALL,
+      .args = {.call = {symbol, symbol_len, n_args}},
+  };
+}
+
+Command command_ret_new(void) { return (Command){.kind = CMD_RET}; }
+
 static void parser_init(Parser *p, const char *file_name) {
   p->cur = 0;
   p->tokens = nullptr;
@@ -443,18 +584,14 @@ static int parser_translate_pop_cmd(Parser *p, Arena *arena, CommandPop cmd,
   }
 }
 
-static const char *parser_gen_label(Parser *p, Arena *arena) {
-  return arena_sprintf(arena, "L%zu", p->_label_idx++);
-}
-
 #define FN_FRAME_SIZE 5
 
 /**
  * Parse the list of tokens into a Hack Assembly string. Its memory will be
  * allocated from the given arena allocator.
  */
-static int parser_parse_line(Parser *p, Arena *arena, const TokenList *tokens,
-                             char **out_hack) {
+static int parser_parse_line(Parser *p, const TokenList *tokens,
+                             Command *out_cmd) {
   if (tokens->count == 0) {
     return 0;
   }
@@ -478,11 +615,7 @@ static int parser_parse_line(Parser *p, Arena *arena, const TokenList *tokens,
       return -1;
     }
 
-    res = parser_translate_push_cmd(p, arena, cmd, out_hack);
-    if (res < 0) {
-      return -1;
-    }
-
+    *out_cmd = command_push_new(cmd.segment, cmd.index);
     return 0;
   }
 
@@ -503,11 +636,7 @@ static int parser_parse_line(Parser *p, Arena *arena, const TokenList *tokens,
       return -1;
     }
 
-    res = parser_translate_pop_cmd(p, arena, cmd, out_hack);
-    if (res < 0) {
-      return -1;
-    }
-
+    *out_cmd = command_pop_new(cmd.segment, cmd.index);
     return 0;
   }
 
@@ -520,24 +649,18 @@ static int parser_parse_line(Parser *p, Arena *arena, const TokenList *tokens,
       return -1;
     }
 
-    const char *set_data_reg_cmd;
     if (cur_token_kind == TK_ADD)
-      set_data_reg_cmd = "D=D+M";
+      *out_cmd = command_add_new();
     else if (cur_token_kind == TK_SUB)
-      set_data_reg_cmd = "D=M-D";
+      *out_cmd = command_sub_new();
     else if (cur_token_kind == TK_AND)
-      set_data_reg_cmd = "D=D&M";
+      *out_cmd = command_and_new();
     else if (cur_token_kind == TK_OR)
-      set_data_reg_cmd = "D=D|M";
+      *out_cmd = command_or_new();
     else
       return error_set("process unary expression: unknown token kind %d",
                        cur_token_kind);
 
-    // pop the top two value of the stack, add them together and put the result
-    // in the D register.
-    const char *hack_assembly_calc = arena_sprintf(
-        arena, "@SP\nAM=M-1\nD=M\n@SP\nAM=M-1\n%s\n", set_data_reg_cmd);
-    *out_hack = arena_sprintf(arena, "%s%s", hack_assembly_calc, hack_asm_push);
     return 0;
   }
 
@@ -549,18 +672,14 @@ static int parser_parse_line(Parser *p, Arena *arena, const TokenList *tokens,
       return -1;
     }
 
-    const char *set_data_reg_cmd;
     if (cur_token_kind == TK_NEG)
-      set_data_reg_cmd = "D=-M";
+      *out_cmd = command_neg_new();
     else if (cur_token_kind == TK_NOT)
-      set_data_reg_cmd = "D=!M";
+      *out_cmd = command_not_new();
     else
       return error_set("process unary expression: unknown token kind %d",
                        cur_token_kind);
 
-    const char *hack_assembly_calc =
-        arena_sprintf(arena, "@SP\nAM=M-1\n%s\n", set_data_reg_cmd);
-    *out_hack = arena_sprintf(arena, "%s%s", hack_assembly_calc, hack_asm_push);
     return 0;
   }
 
@@ -568,45 +687,22 @@ static int parser_parse_line(Parser *p, Arena *arena, const TokenList *tokens,
       cur_token_kind == TK_LT) {
     p->cur++;
 
-    const char *push_true_label = parser_gen_label(p, arena);
-    const char *push_false_label = parser_gen_label(p, arena);
-
     int res = parser_read_eol(p);
     if (res < 0) {
       return -1;
     }
 
-    const char *conditional_jmp;
     if (cur_token_kind == TK_EQ)
-      conditional_jmp = "JEQ";
+      *out_cmd = command_eq_new();
     else if (cur_token_kind == TK_GT)
-      conditional_jmp = "JGT";
+      *out_cmd = command_gt_new();
     else if (cur_token_kind == TK_LT)
-      conditional_jmp = "JLT";
+      *out_cmd = command_lt_new();
     else {
       return error_set("process comparison expression: unknown token kind %d",
                        cur_token_kind);
     }
 
-    const char *hack_assembly_compare =
-        arena_sprintf(arena,
-                      "@SP\n"
-                      "AM=M-1\n"
-                      "D=M\n"
-                      "@SP\n"
-                      "AM=M-1\n"
-                      "D=M-D\n"
-                      "@%s\n"  // push true
-                      "D;%s\n" // conditional jump command
-                      "@%s\n"  // push false
-                      "D=0;JMP\n"
-                      "(%s)\n" // push true
-                      "D=-1\n"
-                      "(%s)\n", // push false
-                      push_true_label, conditional_jmp, push_false_label,
-                      push_true_label, push_false_label);
-    *out_hack =
-        arena_sprintf(arena, "%s%s", hack_assembly_compare, hack_asm_push);
     return 0;
   }
 
@@ -625,7 +721,7 @@ static int parser_parse_line(Parser *p, Arena *arena, const TokenList *tokens,
       return -1;
     }
 
-    *out_hack = arena_sprintf(arena, "(%.*s)\n", (int)n, symbol);
+    *out_cmd = command_lbl_new(n, symbol);
     return 0;
   }
 
@@ -644,7 +740,7 @@ static int parser_parse_line(Parser *p, Arena *arena, const TokenList *tokens,
       return -1;
     }
 
-    *out_hack = arena_sprintf(arena, "@%.*s\n0;JMP\n", (int)n, symbol);
+    *out_cmd = command_goto_new(n, symbol);
     return 0;
   }
 
@@ -663,13 +759,7 @@ static int parser_parse_line(Parser *p, Arena *arena, const TokenList *tokens,
       return -1;
     }
 
-    *out_hack = arena_sprintf(arena,
-                              "@SP\n"
-                              "AM=M-1\n"
-                              "D=M\n"
-                              "@%.*s\n"
-                              "D;JNE\n",
-                              (int)n, symbol);
+    *out_cmd = command_ifgoto_new(n, symbol);
     return 0;
   }
 
@@ -691,52 +781,41 @@ static int parser_parse_line(Parser *p, Arena *arena, const TokenList *tokens,
     if (res < 0)
       return -1;
 
-    // TODO: replace with real return address.
-    const char *return_addr = "Sys.main$ret.0";
-    *out_hack = arena_sprintf(arena,
-                              "@%s\n" // push return address
-                              "D=A\n"
-                              "@SP\n"
-                              "AM=M+1\n"
-                              "A=A-1\n"
-                              "M=D\n"
-                              "@LCL\n" // push LCL base address
-                              "D=M\n"
-                              "@SP\n"
-                              "AM=M+1\n"
-                              "A=A-1\n"
-                              "M=D\n"
-                              "@ARG\n" // push ARG base address
-                              "D=M\n"
-                              "@SP\n"
-                              "AM=M+1\n"
-                              "A=A-1\n"
-                              "M=D\n"
-                              "@THIS\n"
-                              "D=M\n"
-                              "@SP\n"
-                              "AM=M+1\n"
-                              "A=A-1\n"
-                              "M=D\n"
-                              "@THAT\n"
-                              "D=M\n"
-                              "@SP\n"
-                              "AM=M+1\n"
-                              "A=A-1\n"
-                              "M=D\n"
-                              "@%zu\n"
-                              "D=A\n"
-                              "@ARG\n" // set ARG and LCL for callee
-                              "M=A-D\n"
-                              "@SP\n"
-                              "D=M\n"
-                              "@LCL\n"
-                              "M=D\n"
-                              "@%.*s\n" // jump to the target function
-                              "0;JMP\n"
-                              "(%s)",
-                              return_addr, FN_FRAME_SIZE + n_args, (int)n,
-                              symbol, return_addr);
+    *out_cmd = command_call_new(n, symbol, n_args);
+    return 0;
+  }
+
+  if (cur_token_kind == TK_FUNCTION) {
+    p->cur++;
+
+    size_t n = 0;
+    const char *symbol = nullptr;
+    int res = parser_read_symbol(p, &n, &symbol);
+    if (res < 0)
+      return -1;
+
+    size_t n_args = 0;
+    res = parser_read_number(p, &n_args);
+    if (res < 0)
+      return -1;
+
+    res = parser_read_eol(p);
+    if (res < 0)
+      return -1;
+
+    *out_cmd = command_func_new(n, symbol, n_args);
+    return 0;
+  }
+
+  if (cur_token_kind == TK_RETURN) {
+    p->cur++;
+
+    int res = parser_read_eol(p);
+    if (res < 0)
+      return -1;
+
+    *out_cmd = command_ret_new();
+    return 0;
   }
 
   return error_set("unsupported command (token kind %d)",
@@ -775,55 +854,127 @@ static int readline(FILE *fp, Arena *arena, char **out, size_t *out_len) {
   return 0;
 }
 
-/**
- * Translate the given VM language stream into Hack Assembly and write
- * the output to the given destination.
- */
-int translate(const char *in_file_name, FILE *in, FILE *out) {
-  Arena scratch = {0};
-  Lexer lexer = {0};
-  lexer_init(&lexer);
-  Parser p;
-  parser_init(&p, in_file_name);
-  int retval = -1;
+typedef struct {
+  Lexer lexer;
+  Parser parser;
+  Arena arena;
+  const char *_file_name;
+  // Name of the function for which we're currently processing commands.
+  const char *_cur_func_name;
+} Translator;
+
+void translator_translate_cmd(Translator *t, Command cmd, char **out) {
+  switch (cmd.kind) {
+  case CMD_PUSH:
+  case CMD_POP:
+  case CMD_ADD:
+  case CMD_SUB:
+  case CMD_AND:
+  case CMD_OR:
+  case CMD_NEG:
+  case CMD_NOT:
+  case CMD_EQ:
+  case CMD_GT:
+  case CMD_LT:
+  case CMD_LBL:
+  case CMD_GOTO:
+  case CMD_IFGOTO:
+  case CMD_FUNC:
+  case CMD_CALL:
+  case CMD_RET:
+    break;
+  }
+}
+
+int translator_translate(Translator *t, FILE *in, FILE *out) {
+  arena_reset(&t->arena);
 
   while (true) {
     char *line = nullptr;
     size_t line_len = 0;
-    char *hack = nullptr;
-    int res = readline(in, &scratch, &line, &line_len);
+    int res = readline(in, &t->arena, &line, &line_len);
     if (res == EOF)
       break;
     if (line_len == 0)
       continue;
 
     TokenList tokens = {0};
-    res = lexer_tokenize(&lexer, &scratch, line_len, line, &tokens);
+    res = lexer_tokenize(&t->lexer, &t->arena, line_len, line, &tokens);
     if (res < 0) {
       fputs(error_get(), stderr);
-      goto cleanup;
+      return -1;
     }
-
     if (tokens.count == 0)
       continue;
 
-    res = parser_parse_line(&p, &scratch, &tokens, &hack);
+    Command cmd = {0};
+    res = parser_parse_line(&t->parser, &tokens, &cmd);
     if (res < 0) {
       fputs(error_get(), stderr);
-      goto cleanup;
+      return -1;
     }
 
+    char *hack = nullptr;
+    translator_translate_cmd(t, cmd, &hack);
     if (fputs(hack, out) == EOF && ferror(out)) {
       perror("cannot write to destination");
-      goto cleanup;
     }
 
-    arena_reset(&scratch);
+    arena_reset(&t->arena);
   }
-  retval = 0;
 
-cleanup:
-  lexer_deinit(&lexer);
-  arena_free(&scratch);
-  return retval;
+  return 0;
 }
+
+/**
+ * Translate the given VM language stream into Hack Assembly and write
+ * the output to the given destination.
+ */
+// int translate(const char *in_file_name, FILE *in, FILE *out) {
+//   Arena scratch = {0};
+//   Lexer lexer = {0};
+//   lexer_init(&lexer);
+//   Parser p;
+//   parser_init(&p, in_file_name);
+//   int retval = -1;
+
+//   while (true) {
+//     char *line = nullptr;
+//     size_t line_len = 0;
+//     char *hack = nullptr;
+//     int res = readline(in, &scratch, &line, &line_len);
+//     if (res == EOF)
+//       break;
+//     if (line_len == 0)
+//       continue;
+
+//     TokenList tokens = {0};
+//     res = lexer_tokenize(&lexer, &scratch, line_len, line, &tokens);
+//     if (res < 0) {
+//       fputs(error_get(), stderr);
+//       goto cleanup;
+//     }
+
+//     if (tokens.count == 0)
+//       continue;
+
+//     res = parser_parse_line(&p, &scratch, &tokens, &hack);
+//     if (res < 0) {
+//       fputs(error_get(), stderr);
+//       goto cleanup;
+//     }
+
+//     if (fputs(hack, out) == EOF && ferror(out)) {
+//       perror("cannot write to destination");
+//       goto cleanup;
+//     }
+
+//     arena_reset(&scratch);
+//   }
+//   retval = 0;
+
+// cleanup:
+//   lexer_deinit(&lexer);
+//   arena_free(&scratch);
+//   return retval;
+// }
