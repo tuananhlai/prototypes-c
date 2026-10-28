@@ -162,7 +162,7 @@ static int resolve_word(Lexer *lexer, Arena *arena, size_t n,
   if (isdigit(word[0])) {
     for (size_t i = 1; i < n; i++) {
       if (!isdigit(word[i]))
-        return error_set("invalid number '%s'", word);
+        return error_set("invalid number '%.*s'", (int)n, word);
     }
     *out_token = token_create3(TK_NUMBER, n, word);
     return 0;
@@ -274,14 +274,14 @@ typedef struct {
 } CommandIfgotoArgs;
 
 typedef struct {
-  const char *symbol;
-  size_t symbol_len;
+  const char *fn_name;
+  size_t fn_name_len;
   size_t n_vars;
 } CommandFuncArgs;
 
 typedef struct {
-  const char *symbol;
-  size_t symbol_len;
+  const char *fn_name;
+  size_t fn_name_len;
   size_t n_args;
 } CommandCallArgs;
 
@@ -732,12 +732,14 @@ static int readline(FILE *fp, Arena *arena, char **out, size_t *out_len) {
 typedef struct {
   Lexer lexer;
   Parser parser;
-  Arena arena;
+  // Reset after parsing each line of VM code.
+  Arena line_arena;
+  // Destroy once when Translator is destroyed.
+  Arena perm_arena;
   const char *_file_name;
   // Name of the function for which we're currently processing commands.
-  const char *_cur_func_name;
+  char *_cur_func_name;
   // Counter used to generate unique internal labels.
-  // TODO: prevent collision with user label
   size_t _label_idx;
 } Translator;
 
@@ -746,24 +748,24 @@ void translator_init(Translator *t, const char *file_name) {
   lexer_init(&t->lexer);
   t->parser = (Parser){0};
   parser_init(&t->parser);
-  t->arena = (Arena){0};
+  t->line_arena = (Arena){0};
   t->_file_name = file_name;
-  t->_cur_func_name = "";
+  t->_cur_func_name = nullptr;
   t->_label_idx = 0;
 }
 
 void translator_deinit(Translator *t) {
   lexer_deinit(&t->lexer);
-  arena_free(&t->arena);
+  arena_free(&t->line_arena);
 }
 
 static const char *translator_gen_label(Translator *t) {
-  return arena_sprintf(&t->arena, "L%zu", t->_label_idx++);
+  return arena_sprintf(&t->line_arena, "L%zu", t->_label_idx++);
 }
 
 static int translator_translate_push(Translator *t, CommandPushArgs args,
                                      char **out) {
-  Arena *arena = &t->arena;
+  Arena *arena = &t->line_arena;
 
   switch (args.segment) {
   case MS_ARGUMENT: {
@@ -817,7 +819,7 @@ static int translator_translate_push(Translator *t, CommandPushArgs args,
 
 static int translator_translate_pop(Translator *t, CommandPopArgs args,
                                     char **out) {
-  Arena *arena = &t->arena;
+  Arena *arena = &t->line_arena;
 
   switch (args.segment) {
   case MS_LOCAL:
@@ -862,8 +864,24 @@ static int translator_translate_pop(Translator *t, CommandPopArgs args,
   }
 }
 
-int translator_translate_cmd(Translator *t, Command cmd, char **out) {
-  Arena *arena = &t->arena;
+static const char *translator_next_retaddr(Translator *t, size_t n,
+                                           const char fn_name[n]) {
+  return arena_sprintf(&t->line_arena, "%.*s$ret.%zu", (int)n, fn_name,
+                       t->_label_idx++);
+}
+
+static const char *translator_get_label(Translator *t, size_t n,
+                                        const char label[n]) {
+  if (!t->_cur_func_name) {
+    return arena_sprintf(&t->line_arena, "%.*s", (int)n, label);
+  }
+
+  return arena_sprintf(&t->line_arena, "%s$%.*s", t->_cur_func_name, (int)n,
+                       label);
+}
+
+static int translator_translate_cmd(Translator *t, Command cmd, char **out) {
+  Arena *arena = &t->line_arena;
 
   switch (cmd.kind) {
   case CMD_PUSH:
@@ -940,13 +958,14 @@ int translator_translate_cmd(Translator *t, Command cmd, char **out) {
   }
   case CMD_LBL: {
     CommandLblArgs args = cmd.args.lbl;
-    *out = arena_sprintf(arena, "(%.*s)\n", (int)args.symbol_len, args.symbol);
+    *out = arena_sprintf(arena, "(%s)\n",
+                         translator_get_label(t, args.symbol_len, args.symbol));
     return 0;
   }
   case CMD_GOTO: {
     CommandGotoArgs args = cmd.args.gotoz;
-    *out = arena_sprintf(arena, "@%.*s\n0;JMP\n", (int)args.symbol_len,
-                         args.symbol);
+    *out = arena_sprintf(arena, "@%s\n0;JMP\n",
+                         translator_get_label(t, args.symbol_len, args.symbol));
     return 0;
   }
   case CMD_IFGOTO: {
@@ -955,16 +974,17 @@ int translator_translate_cmd(Translator *t, Command cmd, char **out) {
                          "@SP\n"
                          "AM=M-1\n"
                          "D=M\n"
-                         "@%.*s\n"
+                         "@%s\n"
                          "D;JNE\n",
-                         (int)args.symbol_len, args.symbol);
+                         translator_get_label(t, args.symbol_len, args.symbol));
     return 0;
   }
   case CMD_CALL: {
     CommandCallArgs args = cmd.args.call;
 
-    // TODO: replace with real return address.
-    const char *return_addr = "Sys.main$ret.0";
+    const char *return_addr =
+        translator_next_retaddr(t, args.fn_name_len, args.fn_name);
+
     *out = arena_sprintf(arena,
                          "@%s\n" // push return address
                          "D=A\n"
@@ -1008,33 +1028,107 @@ int translator_translate_cmd(Translator *t, Command cmd, char **out) {
                          "0;JMP\n"
                          "(%s)",
                          return_addr, FN_FRAME_SIZE + args.n_args,
-                         (int)args.symbol_len, args.symbol, return_addr);
+                         (int)args.fn_name_len, args.fn_name, return_addr);
     return 0;
   }
   case CMD_FUNC:
+    CommandFuncArgs args = cmd.args.func;
+    if (t->_cur_func_name && strlen(t->_cur_func_name) < args.fn_name_len) {
+      t->_cur_func_name = realloc(t->_cur_func_name, args.fn_name_len + 1);
+    }
+    t->_cur_func_name[args.fn_name_len] = '\0';
+    memcpy(t->_cur_func_name, args.fn_name, args.fn_name_len);
+
+    const char *loop_label = translator_gen_label(t);
+    const char *loop_end_label = translator_gen_label(t);
+    *out = arena_sprintf(
+        &t->line_arena,
+        "(%.*s)\n" // fn name
+        "@%zu\n"
+        "D=A\n"
+        "@R13\n"
+        "M=D-1\n" // remove 1 so that the loop runs exactly `n_vars` times.
+        "(%s)\n"  // loop start
+        "@R13\n"
+        "D=M\n"
+        "@%s\n" // loop end
+        "D;JEQ\n"
+        "@SP\n"
+        "AM=M+1\n"
+        "A=A-1\n"
+        "M=0\n"
+        "@%s\n" // loop start
+        "0;JMP\n"
+        "(%s)\n", // loop end
+        (int)args.fn_name_len, args.fn_name, args.n_vars, loop_label,
+        loop_end_label, loop_label, loop_end_label);
+    return 0;
   case CMD_RET:
-    break;
+    *out = "@SP\n"
+           "AM=M-1\n"
+           "D=M\n"
+           "@R13\n" // store result in R13
+           "M=D\n"
+           "@LCL\n"
+           "D=M\n"
+           "@SP\n"
+           "AM=D-1\n"
+           "D=M\n"
+           "@THAT\n"
+           "M=D\n"
+           "@SP\n"
+           "AM=M-1\n"
+           "D=M\n"
+           "@THIS\n"
+           "M=D\n"
+           "@SP\n"
+           "AM=M-1\n"
+           "D=M\n"
+           "@ARG\n"
+           "M=D\n"
+           "@SP\n"
+           "AM=M-1\n"
+           "D=M\n"
+           "@LCL\n"
+           "M=D\n"
+           "@SP\n"
+           "AM=M-1\n"
+           "D=M\n"
+           "@R14\n"
+           "M=D\n"
+           "@ARG\n"
+           "D=M\n"
+           "@SP\n"
+           "M=D\n"
+           "@R13\n" // push result from R13 to top of the stack
+           "D=M\n"
+           "@SP\n"
+           "AM=M+1\n"
+           "A=A-1\n"
+           "M=D\n"
+           "@R14\n" // jump to return address stored in R14
+           "0;JMP\n";
+    return 0;
   }
 
   return error_set("unsupported command kind %d", cmd.kind);
 }
 
 int translator_translate(Translator *t, FILE *in, FILE *out) {
-  arena_reset(&t->arena);
+  arena_reset(&t->line_arena);
 
   while (true) {
     char *line = nullptr;
     size_t line_len = 0;
-    int res = readline(in, &t->arena, &line, &line_len);
+    int res = readline(in, &t->line_arena, &line, &line_len);
     if (res == EOF)
       break;
     if (line_len == 0)
       continue;
 
     TokenList tokens = {0};
-    res = lexer_tokenize(&t->lexer, &t->arena, line_len, line, &tokens);
+    res = lexer_tokenize(&t->lexer, &t->line_arena, line_len, line, &tokens);
     if (res < 0) {
-      fputs(error_get(), stderr);
       return -1;
     }
     if (tokens.count == 0)
@@ -1055,7 +1149,7 @@ int translator_translate(Translator *t, FILE *in, FILE *out) {
       return error_set("cannot write to destination: %s", strerror(errno));
     }
 
-    arena_reset(&t->arena);
+    arena_reset(&t->line_arena);
   }
 
   return 0;
