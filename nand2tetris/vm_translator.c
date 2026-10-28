@@ -1,4 +1,5 @@
 #include <ctype.h>
+#include <errno.h>
 #include <stdarg.h>
 #include <stddef.h>
 #include <stdio.h>
@@ -214,8 +215,6 @@ static int lexer_tokenize(Lexer *lexer, Arena *arena, size_t vm_line_len,
 typedef struct {
   size_t cur;
   const TokenList *tokens;
-  const char *_file_name;
-  size_t _label_idx;
 } Parser;
 
 typedef enum {
@@ -228,11 +227,6 @@ typedef enum {
   MS_POINTER,
   MS_TEMP,
 } MemorySegment;
-
-typedef struct {
-  MemorySegment segment;
-  size_t index;
-} CommandPush;
 
 typedef enum {
   CMD_PUSH,
@@ -310,53 +304,39 @@ Command command_push_new(MemorySegment segment, size_t index) {
       .args = {.push = {segment, index}},
   };
 }
-
 Command command_pop_new(MemorySegment segment, size_t index) {
   return (Command){
       .kind = CMD_POP,
       .args = {.pop = {segment, index}},
   };
 }
-
 Command command_add_new(void) { return (Command){.kind = CMD_ADD}; }
-
 Command command_sub_new(void) { return (Command){.kind = CMD_SUB}; }
-
 Command command_and_new(void) { return (Command){.kind = CMD_AND}; }
-
 Command command_or_new(void) { return (Command){.kind = CMD_OR}; }
-
 Command command_neg_new(void) { return (Command){.kind = CMD_NEG}; }
-
 Command command_not_new(void) { return (Command){.kind = CMD_NOT}; }
-
 Command command_eq_new(void) { return (Command){.kind = CMD_EQ}; }
-
 Command command_gt_new(void) { return (Command){.kind = CMD_GT}; }
-
 Command command_lt_new(void) { return (Command){.kind = CMD_LT}; }
-
 Command command_lbl_new(size_t symbol_len, const char symbol[symbol_len]) {
   return (Command){
       .kind = CMD_LBL,
       .args = {.lbl = {symbol, symbol_len}},
   };
 }
-
 Command command_goto_new(size_t symbol_len, const char symbol[symbol_len]) {
   return (Command){
       .kind = CMD_GOTO,
       .args = {.gotoz = {symbol, symbol_len}},
   };
 }
-
 Command command_ifgoto_new(size_t symbol_len, const char symbol[symbol_len]) {
   return (Command){
       .kind = CMD_IFGOTO,
       .args = {.ifgoto = {symbol, symbol_len}},
   };
 }
-
 Command command_func_new(size_t symbol_len, const char symbol[symbol_len],
                          size_t n_vars) {
   return (Command){
@@ -364,7 +344,6 @@ Command command_func_new(size_t symbol_len, const char symbol[symbol_len],
       .args = {.func = {symbol, symbol_len, n_vars}},
   };
 }
-
 Command command_call_new(size_t symbol_len, const char symbol[symbol_len],
                          size_t n_args) {
   return (Command){
@@ -372,15 +351,11 @@ Command command_call_new(size_t symbol_len, const char symbol[symbol_len],
       .args = {.call = {symbol, symbol_len, n_args}},
   };
 }
-
 Command command_ret_new(void) { return (Command){.kind = CMD_RET}; }
 
-static void parser_init(Parser *p, const char *file_name) {
+static void parser_init(Parser *p) {
   p->cur = 0;
   p->tokens = nullptr;
-  p->_file_name = file_name;
-  // TODO: prevent collision with user label
-  p->_label_idx = 0;
 }
 
 // Hack Assembly code which pushes the value stored inside the D register
@@ -480,109 +455,7 @@ static int parser_read_symbol(Parser *p, size_t *out_n,
 
 #define TEMP_ADDR 5
 
-static int parser_translate_push_cmd(Parser *p, Arena *arena, CommandPush cmd,
-                                     char **out) {
-  switch (cmd.segment) {
-  case MS_ARGUMENT: {
-    *out = arena_sprintf(arena, "@ARG\nD=M\n@%zu\nA=D+A\nD=M\n%s", cmd.index,
-                         hack_asm_push);
-    return 0;
-  }
-  case MS_LOCAL: {
-    *out = arena_sprintf(arena, "@LCL\nD=M\n@%zu\nA=D+A\nD=M\n%s", cmd.index,
-                         hack_asm_push);
-    return 0;
-  }
-  case MS_STATIC: {
-    *out = arena_sprintf(arena, "@%s.%zu\nD=M\n%s", p->_file_name, cmd.index,
-                         hack_asm_push);
-    return 0;
-  }
-  case MS_CONSTANT: {
-    *out = arena_sprintf(arena, "@%zu\nD=A\n%s", cmd.index, hack_asm_push);
-    return 0;
-  }
-  case MS_THIS: {
-    *out = arena_sprintf(arena, "@THIS\nD=M\n@%zu\nA=D+A\nD=M\n%s", cmd.index,
-                         hack_asm_push);
-    return 0;
-  }
-  case MS_THAT: {
-    *out = arena_sprintf(arena, "@THAT\nD=M\n@%zu\nA=D+A\nD=M\n%s", cmd.index,
-                         hack_asm_push);
-    return 0;
-  }
-  case MS_POINTER: {
-    if (cmd.index != 0 && cmd.index != 1) {
-      return error_set(
-          "error invalid index for pointer segment: expect 0 or 1, got %zu",
-          cmd.index);
-    }
-
-    const char *src_addr = cmd.index == 0 ? "THIS" : "THAT";
-    *out = arena_sprintf(arena, "@%s\nD=M\n%s", src_addr, hack_asm_push);
-    return 0;
-  }
-  case MS_TEMP: {
-    *out = arena_sprintf(arena, "@%zu\nD=M\n%s", TEMP_ADDR + cmd.index,
-                         hack_asm_push);
-    return 0;
-  }
-  }
-}
-
-typedef struct {
-  MemorySegment segment;
-  size_t index;
-} CommandPop;
-
 static const char *hack_asm_pop = "@SP\nAM=M-1\nD=M\n";
-
-static int parser_translate_pop_cmd(Parser *p, Arena *arena, CommandPop cmd,
-                                    char **out_hack) {
-
-  switch (cmd.segment) {
-  case MS_LOCAL:
-  case MS_ARGUMENT:
-  case MS_THIS:
-  case MS_THAT: {
-    const char *dest_addr;
-    if (cmd.segment == MS_LOCAL)
-      dest_addr = "LCL";
-    else if (cmd.segment == MS_ARGUMENT)
-      dest_addr = "ARG";
-    else if (cmd.segment == MS_THIS)
-      dest_addr = "THIS";
-    else if (cmd.segment == MS_THAT)
-      dest_addr = "THAT";
-    else
-      return -1;
-
-    *out_hack = arena_sprintf(
-        arena, "@%zu\nD=A\n@%s\nD=D+M\n@R13\nM=D\n%s@R13\nA=M\nM=D\n",
-        cmd.index, dest_addr, hack_asm_pop);
-    return 0;
-  }
-  case MS_TEMP: {
-    *out_hack = arena_sprintf(arena, "%s@%zu\nM=D\n", hack_asm_pop,
-                              TEMP_ADDR + cmd.index);
-    return 0;
-  }
-  case MS_POINTER: {
-    const char *dest_addr = cmd.index == 0 ? "THIS" : "THAT";
-    *out_hack = arena_sprintf(arena, "%s@%s\nM=D\n", hack_asm_pop, dest_addr);
-    return 0;
-  }
-  case MS_STATIC: {
-    *out_hack = arena_sprintf(arena, "%s@%s.%zu\nM=D\n", hack_asm_pop,
-                              p->_file_name, cmd.index);
-    return 0;
-  }
-  default: {
-    return error_set("unsupported segment: %d", cmd.segment);
-  }
-  }
-}
 
 #define FN_FRAME_SIZE 5
 
@@ -601,12 +474,13 @@ static int parser_parse_line(Parser *p, const TokenList *tokens,
   TokenKind cur_token_kind = p->tokens->items[p->cur].kind;
   if (cur_token_kind == TK_PUSH) {
     p->cur++;
-    CommandPush cmd = {0};
-    int res = parser_read_segment(p, &cmd.segment);
+    MemorySegment segment;
+    int res = parser_read_segment(p, &segment);
     if (res < 0)
       return -1;
 
-    res = parser_read_number(p, &cmd.index);
+    size_t index = 0;
+    res = parser_read_number(p, &index);
     if (res < 0)
       return -1;
 
@@ -615,19 +489,20 @@ static int parser_parse_line(Parser *p, const TokenList *tokens,
       return -1;
     }
 
-    *out_cmd = command_push_new(cmd.segment, cmd.index);
+    *out_cmd = command_push_new(segment, index);
     return 0;
   }
 
   if (cur_token_kind == TK_POP) {
     p->cur++;
 
-    CommandPop cmd = {0};
-    int res = parser_read_segment(p, &cmd.segment);
+    MemorySegment segment;
+    int res = parser_read_segment(p, &segment);
     if (res < 0)
       return -1;
 
-    res = parser_read_number(p, &cmd.index);
+    size_t index = 0;
+    res = parser_read_number(p, &index);
     if (res < 0)
       return -1;
 
@@ -636,7 +511,7 @@ static int parser_parse_line(Parser *p, const TokenList *tokens,
       return -1;
     }
 
-    *out_cmd = command_pop_new(cmd.segment, cmd.index);
+    *out_cmd = command_pop_new(segment, index);
     return 0;
   }
 
@@ -861,29 +736,287 @@ typedef struct {
   const char *_file_name;
   // Name of the function for which we're currently processing commands.
   const char *_cur_func_name;
+  // Counter used to generate unique internal labels.
+  // TODO: prevent collision with user label
+  size_t _label_idx;
 } Translator;
 
-void translator_translate_cmd(Translator *t, Command cmd, char **out) {
+void translator_init(Translator *t, const char *file_name) {
+  t->lexer = (Lexer){0};
+  lexer_init(&t->lexer);
+  t->parser = (Parser){0};
+  parser_init(&t->parser);
+  t->arena = (Arena){0};
+  t->_file_name = file_name;
+  t->_cur_func_name = "";
+  t->_label_idx = 0;
+}
+
+void translator_deinit(Translator *t) {
+  lexer_deinit(&t->lexer);
+  arena_free(&t->arena);
+}
+
+static const char *translator_gen_label(Translator *t) {
+  return arena_sprintf(&t->arena, "L%zu", t->_label_idx++);
+}
+
+static int translator_translate_push(Translator *t, CommandPushArgs args,
+                                     char **out) {
+  Arena *arena = &t->arena;
+
+  switch (args.segment) {
+  case MS_ARGUMENT: {
+    *out = arena_sprintf(arena, "@ARG\nD=M\n@%zu\nA=D+A\nD=M\n%s", args.index,
+                         hack_asm_push);
+    return 0;
+  }
+  case MS_LOCAL: {
+    *out = arena_sprintf(arena, "@LCL\nD=M\n@%zu\nA=D+A\nD=M\n%s", args.index,
+                         hack_asm_push);
+    return 0;
+  }
+  case MS_STATIC: {
+    *out = arena_sprintf(arena, "@%s.%zu\nD=M\n%s", t->_file_name, args.index,
+                         hack_asm_push);
+    return 0;
+  }
+  case MS_CONSTANT: {
+    *out = arena_sprintf(arena, "@%zu\nD=A\n%s", args.index, hack_asm_push);
+    return 0;
+  }
+  case MS_THIS: {
+    *out = arena_sprintf(arena, "@THIS\nD=M\n@%zu\nA=D+A\nD=M\n%s", args.index,
+                         hack_asm_push);
+    return 0;
+  }
+  case MS_THAT: {
+    *out = arena_sprintf(arena, "@THAT\nD=M\n@%zu\nA=D+A\nD=M\n%s", args.index,
+                         hack_asm_push);
+    return 0;
+  }
+  case MS_POINTER: {
+    if (args.index != 0 && args.index != 1) {
+      return error_set(
+          "error invalid index for pointer segment: expect 0 or 1, got %zu",
+          args.index);
+    }
+
+    const char *src_addr = args.index == 0 ? "THIS" : "THAT";
+    *out = arena_sprintf(arena, "@%s\nD=M\n%s", src_addr, hack_asm_push);
+    return 0;
+  }
+  case MS_TEMP: {
+    *out = arena_sprintf(arena, "@%zu\nD=M\n%s", TEMP_ADDR + args.index,
+                         hack_asm_push);
+    return 0;
+  }
+  }
+  return error_set("unsupported segment: %d", args.segment);
+}
+
+static int translator_translate_pop(Translator *t, CommandPopArgs args,
+                                    char **out) {
+  Arena *arena = &t->arena;
+
+  switch (args.segment) {
+  case MS_LOCAL:
+  case MS_ARGUMENT:
+  case MS_THIS:
+  case MS_THAT: {
+    const char *dest_addr;
+    if (args.segment == MS_LOCAL)
+      dest_addr = "LCL";
+    else if (args.segment == MS_ARGUMENT)
+      dest_addr = "ARG";
+    else if (args.segment == MS_THIS)
+      dest_addr = "THIS";
+    else if (args.segment == MS_THAT)
+      dest_addr = "THAT";
+    else
+      return -1;
+
+    *out = arena_sprintf(arena,
+                         "@%zu\nD=A\n@%s\nD=D+M\n@R13\nM=D\n%s@R13\nA=M\nM=D\n",
+                         args.index, dest_addr, hack_asm_pop);
+    return 0;
+  }
+  case MS_TEMP: {
+    *out = arena_sprintf(arena, "%s@%zu\nM=D\n", hack_asm_pop,
+                         TEMP_ADDR + args.index);
+    return 0;
+  }
+  case MS_POINTER: {
+    const char *dest_addr = args.index == 0 ? "THIS" : "THAT";
+    *out = arena_sprintf(arena, "%s@%s\nM=D\n", hack_asm_pop, dest_addr);
+    return 0;
+  }
+  case MS_STATIC: {
+    *out = arena_sprintf(arena, "%s@%s.%zu\nM=D\n", hack_asm_pop, t->_file_name,
+                         args.index);
+    return 0;
+  }
+  default: {
+    return error_set("unsupported segment: %d", args.segment);
+  }
+  }
+}
+
+int translator_translate_cmd(Translator *t, Command cmd, char **out) {
+  Arena *arena = &t->arena;
+
   switch (cmd.kind) {
   case CMD_PUSH:
+    return translator_translate_push(t, cmd.args.push, out);
   case CMD_POP:
+    return translator_translate_pop(t, cmd.args.pop, out);
   case CMD_ADD:
   case CMD_SUB:
   case CMD_AND:
-  case CMD_OR:
+  case CMD_OR: {
+    const char *set_data_reg_cmd;
+    if (cmd.kind == CMD_ADD)
+      set_data_reg_cmd = "D=D+M";
+    else if (cmd.kind == CMD_SUB)
+      set_data_reg_cmd = "D=M-D";
+    else if (cmd.kind == CMD_AND)
+      set_data_reg_cmd = "D=D&M";
+    else
+      set_data_reg_cmd = "D=D|M";
+
+    // pop the top two value of the stack, add them together and put the result
+    // in the D register.
+    const char *hack_assembly_calc = arena_sprintf(
+        arena, "@SP\nAM=M-1\nD=M\n@SP\nAM=M-1\n%s\n", set_data_reg_cmd);
+    *out = arena_sprintf(arena, "%s%s", hack_assembly_calc, hack_asm_push);
+    return 0;
+  }
   case CMD_NEG:
-  case CMD_NOT:
+  case CMD_NOT: {
+    const char *set_data_reg_cmd;
+    if (cmd.kind == CMD_NEG)
+      set_data_reg_cmd = "D=-M";
+    else
+      set_data_reg_cmd = "D=!M";
+
+    const char *hack_assembly_calc =
+        arena_sprintf(arena, "@SP\nAM=M-1\n%s\n", set_data_reg_cmd);
+    *out = arena_sprintf(arena, "%s%s", hack_assembly_calc, hack_asm_push);
+    return 0;
+  }
   case CMD_EQ:
   case CMD_GT:
-  case CMD_LT:
-  case CMD_LBL:
-  case CMD_GOTO:
-  case CMD_IFGOTO:
+  case CMD_LT: {
+    const char *push_true_label = translator_gen_label(t);
+    const char *push_false_label = translator_gen_label(t);
+
+    const char *conditional_jmp;
+    if (cmd.kind == CMD_EQ)
+      conditional_jmp = "JEQ";
+    else if (cmd.kind == CMD_GT)
+      conditional_jmp = "JGT";
+    else
+      conditional_jmp = "JLT";
+
+    const char *hack_assembly_compare =
+        arena_sprintf(arena,
+                      "@SP\n"
+                      "AM=M-1\n"
+                      "D=M\n"
+                      "@SP\n"
+                      "AM=M-1\n"
+                      "D=M-D\n"
+                      "@%s\n"  // push true
+                      "D;%s\n" // conditional jump command
+                      "@%s\n"  // push false
+                      "D=0;JMP\n"
+                      "(%s)\n" // push true
+                      "D=-1\n"
+                      "(%s)\n", // push false
+                      push_true_label, conditional_jmp, push_false_label,
+                      push_true_label, push_false_label);
+    *out = arena_sprintf(arena, "%s%s", hack_assembly_compare, hack_asm_push);
+    return 0;
+  }
+  case CMD_LBL: {
+    CommandLblArgs args = cmd.args.lbl;
+    *out = arena_sprintf(arena, "(%.*s)\n", (int)args.symbol_len, args.symbol);
+    return 0;
+  }
+  case CMD_GOTO: {
+    CommandGotoArgs args = cmd.args.gotoz;
+    *out = arena_sprintf(arena, "@%.*s\n0;JMP\n", (int)args.symbol_len,
+                         args.symbol);
+    return 0;
+  }
+  case CMD_IFGOTO: {
+    CommandIfgotoArgs args = cmd.args.ifgoto;
+    *out = arena_sprintf(arena,
+                         "@SP\n"
+                         "AM=M-1\n"
+                         "D=M\n"
+                         "@%.*s\n"
+                         "D;JNE\n",
+                         (int)args.symbol_len, args.symbol);
+    return 0;
+  }
+  case CMD_CALL: {
+    CommandCallArgs args = cmd.args.call;
+
+    // TODO: replace with real return address.
+    const char *return_addr = "Sys.main$ret.0";
+    *out = arena_sprintf(arena,
+                         "@%s\n" // push return address
+                         "D=A\n"
+                         "@SP\n"
+                         "AM=M+1\n"
+                         "A=A-1\n"
+                         "M=D\n"
+                         "@LCL\n" // push LCL base address
+                         "D=M\n"
+                         "@SP\n"
+                         "AM=M+1\n"
+                         "A=A-1\n"
+                         "M=D\n"
+                         "@ARG\n" // push ARG base address
+                         "D=M\n"
+                         "@SP\n"
+                         "AM=M+1\n"
+                         "A=A-1\n"
+                         "M=D\n"
+                         "@THIS\n"
+                         "D=M\n"
+                         "@SP\n"
+                         "AM=M+1\n"
+                         "A=A-1\n"
+                         "M=D\n"
+                         "@THAT\n"
+                         "D=M\n"
+                         "@SP\n"
+                         "AM=M+1\n"
+                         "A=A-1\n"
+                         "M=D\n"
+                         "@%zu\n"
+                         "D=A\n"
+                         "@ARG\n" // set ARG and LCL for callee
+                         "M=A-D\n"
+                         "@SP\n"
+                         "D=M\n"
+                         "@LCL\n"
+                         "M=D\n"
+                         "@%.*s\n" // jump to the target function
+                         "0;JMP\n"
+                         "(%s)",
+                         return_addr, FN_FRAME_SIZE + args.n_args,
+                         (int)args.symbol_len, args.symbol, return_addr);
+    return 0;
+  }
   case CMD_FUNC:
-  case CMD_CALL:
   case CMD_RET:
     break;
   }
+
+  return error_set("unsupported command kind %d", cmd.kind);
 }
 
 int translator_translate(Translator *t, FILE *in, FILE *out) {
@@ -910,14 +1043,16 @@ int translator_translate(Translator *t, FILE *in, FILE *out) {
     Command cmd = {0};
     res = parser_parse_line(&t->parser, &tokens, &cmd);
     if (res < 0) {
-      fputs(error_get(), stderr);
       return -1;
     }
 
     char *hack = nullptr;
-    translator_translate_cmd(t, cmd, &hack);
+    res = translator_translate_cmd(t, cmd, &hack);
+    if (res < 0) {
+      return -1;
+    }
     if (fputs(hack, out) == EOF && ferror(out)) {
-      perror("cannot write to destination");
+      return error_set("cannot write to destination: %s", strerror(errno));
     }
 
     arena_reset(&t->arena);
@@ -930,51 +1065,13 @@ int translator_translate(Translator *t, FILE *in, FILE *out) {
  * Translate the given VM language stream into Hack Assembly and write
  * the output to the given destination.
  */
-// int translate(const char *in_file_name, FILE *in, FILE *out) {
-//   Arena scratch = {0};
-//   Lexer lexer = {0};
-//   lexer_init(&lexer);
-//   Parser p;
-//   parser_init(&p, in_file_name);
-//   int retval = -1;
+int translate(const char *in_file_name, FILE *in, FILE *out) {
+  int res = 0;
 
-//   while (true) {
-//     char *line = nullptr;
-//     size_t line_len = 0;
-//     char *hack = nullptr;
-//     int res = readline(in, &scratch, &line, &line_len);
-//     if (res == EOF)
-//       break;
-//     if (line_len == 0)
-//       continue;
+  Translator code_translator = {0};
+  translator_init(&code_translator, in_file_name);
+  res = translator_translate(&code_translator, in, out);
+  translator_deinit(&code_translator);
 
-//     TokenList tokens = {0};
-//     res = lexer_tokenize(&lexer, &scratch, line_len, line, &tokens);
-//     if (res < 0) {
-//       fputs(error_get(), stderr);
-//       goto cleanup;
-//     }
-
-//     if (tokens.count == 0)
-//       continue;
-
-//     res = parser_parse_line(&p, &scratch, &tokens, &hack);
-//     if (res < 0) {
-//       fputs(error_get(), stderr);
-//       goto cleanup;
-//     }
-
-//     if (fputs(hack, out) == EOF && ferror(out)) {
-//       perror("cannot write to destination");
-//       goto cleanup;
-//     }
-
-//     arena_reset(&scratch);
-//   }
-//   retval = 0;
-
-// cleanup:
-//   lexer_deinit(&lexer);
-//   arena_free(&scratch);
-//   return retval;
-// }
+  return res;
+}
