@@ -755,6 +755,7 @@ void translator_init(Translator *t, const char *file_name) {
 }
 
 void translator_deinit(Translator *t) {
+  free(t->_cur_func_name);
   lexer_deinit(&t->lexer);
   arena_free(&t->line_arena);
 }
@@ -985,57 +986,59 @@ static int translator_translate_cmd(Translator *t, Command cmd, char **out) {
     const char *return_addr =
         translator_next_retaddr(t, args.fn_name_len, args.fn_name);
 
-    *out = arena_sprintf(arena,
-                         "@%s\n" // push return address, current value of LCL, ARGS, THIS, THAT to stack
-                         "D=A\n"
-                         "@SP\n"
-                         "AM=M+1\n"
-                         "A=A-1\n"
-                         "M=D\n"
-                         "@LCL\n"
-                         "D=M\n"
-                         "@SP\n"
-                         "AM=M+1\n"
-                         "A=A-1\n"
-                         "M=D\n"
-                         "@ARG\n"
-                         "D=M\n"
-                         "@SP\n"
-                         "AM=M+1\n"
-                         "A=A-1\n"
-                         "M=D\n"
-                         "@THIS\n"
-                         "D=M\n"
-                         "@SP\n"
-                         "AM=M+1\n"
-                         "A=A-1\n"
-                         "M=D\n"
-                         "@THAT\n"
-                         "D=M\n"
-                         "@SP\n"
-                         "AM=M+1\n"
-                         "A=A-1\n"
-                         "M=D\n"
-                         "@%zu\n" // *ARG = *SP - frame_size - number of arguments
-                         "D=A\n"
-                         "@SP\n"
-                         "D=M-D\n"
-                         "@ARG\n"
-                         "M=D\n"
-                         "@SP\n" // *LCL = *SP
-                         "D=M\n"
-                         "@LCL\n"
-                         "M=D\n"
-                         "@%.*s\n" // jump to the target function
-                         "0;JMP\n"
-                         "(%s)",
-                         return_addr, FN_FRAME_SIZE + args.n_args,
-                         (int)args.fn_name_len, args.fn_name, return_addr);
+    *out =
+        arena_sprintf(arena,
+                      "@%s\n" // push return address, current value of LCL,
+                              // ARGS, THIS, THAT to stack
+                      "D=A\n"
+                      "@SP\n"
+                      "AM=M+1\n"
+                      "A=A-1\n"
+                      "M=D\n"
+                      "@LCL\n"
+                      "D=M\n"
+                      "@SP\n"
+                      "AM=M+1\n"
+                      "A=A-1\n"
+                      "M=D\n"
+                      "@ARG\n"
+                      "D=M\n"
+                      "@SP\n"
+                      "AM=M+1\n"
+                      "A=A-1\n"
+                      "M=D\n"
+                      "@THIS\n"
+                      "D=M\n"
+                      "@SP\n"
+                      "AM=M+1\n"
+                      "A=A-1\n"
+                      "M=D\n"
+                      "@THAT\n"
+                      "D=M\n"
+                      "@SP\n"
+                      "AM=M+1\n"
+                      "A=A-1\n"
+                      "M=D\n"
+                      "@%zu\n" // *ARG = *SP - frame_size - number of arguments
+                      "D=A\n"
+                      "@SP\n"
+                      "D=M-D\n"
+                      "@ARG\n"
+                      "M=D\n"
+                      "@SP\n" // *LCL = *SP
+                      "D=M\n"
+                      "@LCL\n"
+                      "M=D\n"
+                      "@%.*s\n" // jump to the target function
+                      "0;JMP\n"
+                      "(%s)",
+                      return_addr, FN_FRAME_SIZE + args.n_args,
+                      (int)args.fn_name_len, args.fn_name, return_addr);
     return 0;
   }
   case CMD_FUNC:
     CommandFuncArgs args = cmd.args.func;
-    if (t->_cur_func_name && strlen(t->_cur_func_name) < args.fn_name_len) {
+    if (!t->_cur_func_name || strlen(t->_cur_func_name) < args.fn_name_len) {
       t->_cur_func_name = realloc(t->_cur_func_name, args.fn_name_len + 1);
     }
     t->_cur_func_name[args.fn_name_len] = '\0';
@@ -1059,6 +1062,8 @@ static int translator_translate_cmd(Translator *t, Command cmd, char **out) {
         "AM=M+1\n"
         "A=A-1\n"
         "M=0\n"
+        "@R13\n"
+        "M=M-1\n"
         "@%s\n" // loop start
         "0;JMP\n"
         "(%s)\n", // loop end
