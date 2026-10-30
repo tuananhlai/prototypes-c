@@ -986,19 +986,19 @@ static int translator_translate_cmd(Translator *t, Command cmd, char **out) {
         translator_next_retaddr(t, args.fn_name_len, args.fn_name);
 
     *out = arena_sprintf(arena,
-                         "@%s\n" // push return address
+                         "@%s\n" // push return address, current value of LCL, ARGS, THIS, THAT to stack
                          "D=A\n"
                          "@SP\n"
                          "AM=M+1\n"
                          "A=A-1\n"
                          "M=D\n"
-                         "@LCL\n" // push LCL base address
+                         "@LCL\n"
                          "D=M\n"
                          "@SP\n"
                          "AM=M+1\n"
                          "A=A-1\n"
                          "M=D\n"
-                         "@ARG\n" // push ARG base address
+                         "@ARG\n"
                          "D=M\n"
                          "@SP\n"
                          "AM=M+1\n"
@@ -1016,11 +1016,13 @@ static int translator_translate_cmd(Translator *t, Command cmd, char **out) {
                          "AM=M+1\n"
                          "A=A-1\n"
                          "M=D\n"
-                         "@%zu\n"
+                         "@%zu\n" // *ARG = *SP - frame_size - number of arguments
                          "D=A\n"
-                         "@ARG\n" // set ARG and LCL for callee
-                         "M=A-D\n"
                          "@SP\n"
+                         "D=M-D\n"
+                         "@ARG\n"
+                         "M=D\n"
+                         "@SP\n" // *LCL = *SP
                          "D=M\n"
                          "@LCL\n"
                          "M=D\n"
@@ -1069,7 +1071,7 @@ static int translator_translate_cmd(Translator *t, Command cmd, char **out) {
            "D=M\n"
            "@R13\n" // store result in R13
            "M=D\n"
-           "@LCL\n"
+           "@LCL\n" // *SP = *LCL
            "D=M\n"
            "@SP\n"
            "AM=D-1\n"
