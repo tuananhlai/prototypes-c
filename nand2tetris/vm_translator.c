@@ -1031,7 +1031,7 @@ static int translator_translate_cmd(Translator *t, Command cmd, char **out) {
                       "M=D\n"
                       "@%.*s\n" // jump to the target function
                       "0;JMP\n"
-                      "(%s)",
+                      "(%s)\n",
                       return_addr, FN_FRAME_SIZE + args.n_args,
                       (int)args.fn_name_len, args.fn_name, return_addr);
     return 0;
@@ -1053,7 +1053,7 @@ static int translator_translate_cmd(Translator *t, Command cmd, char **out) {
         "@%zu\n"
         "D=A\n"
         "@R13\n"
-        "M=D-1\n" // remove 1 so that the loop runs exactly `n_vars` times.
+        "M=D\n"
         "(%s)\n"  // loop start
         "@R13\n"
         "D=M\n"
