@@ -90,6 +90,10 @@ D=M-D
 AM=M+1
 A=A-1
 M=D
+@ARG
+D=M
+@R15
+M=D
 @SP
 AM=M-1
 D=M
@@ -122,7 +126,7 @@ AM=M-1
 D=M
 @R14
 M=D
-@ARG
+@R15
 D=M
 @SP
 M=D
@@ -133,4 +137,5 @@ AM=M+1
 A=A-1
 M=D
 @R14
+A=M
 0;JMP

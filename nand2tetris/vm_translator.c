@@ -1046,6 +1046,7 @@ static int translator_translate_cmd(Translator *t, Command cmd, char **out) {
 
     const char *loop_label = translator_gen_label(t);
     const char *loop_end_label = translator_gen_label(t);
+    // TODO: incorrect return value pushing + go to return address logic.
     *out = arena_sprintf(
         &t->line_arena,
         "(%.*s)\n" // fn name
@@ -1071,7 +1072,11 @@ static int translator_translate_cmd(Translator *t, Command cmd, char **out) {
         loop_end_label, loop_label, loop_end_label);
     return 0;
   case CMD_RET:
-    *out = "@SP\n"
+    *out = "@ARG\n"
+           "D=M\n"
+           "@R15\n"
+           "M=D\n"
+           "@SP\n"
            "AM=M-1\n"
            "D=M\n"
            "@R13\n" // store result in R13
@@ -1103,7 +1108,7 @@ static int translator_translate_cmd(Translator *t, Command cmd, char **out) {
            "D=M\n"
            "@R14\n"
            "M=D\n"
-           "@ARG\n"
+           "@R15\n" // *SP = old *ARGS
            "D=M\n"
            "@SP\n"
            "M=D\n"
@@ -1114,6 +1119,7 @@ static int translator_translate_cmd(Translator *t, Command cmd, char **out) {
            "A=A-1\n"
            "M=D\n"
            "@R14\n" // jump to return address stored in R14
+           "A=M\n"
            "0;JMP\n";
     return 0;
   }
