@@ -34,41 +34,37 @@ void path_split(const char *file_path, Arena *arena, char **path,
   }
 }
 
-void path_basename(const char *file_path, Arena *arena, char **basename,
+void file_basename(const char *file_name, Arena *arena, char **basename,
                    char **ext) {
-  char *file_name = nullptr;
-  path_split(file_path, arena, nullptr, &file_name);
   size_t n = strlen(file_name);
-  size_t dot_idx = n;
+  size_t last_dot_idx = n;
 
   // . does not indicate extension if it was the first character.
   for (size_t i = 1; i < n; i++) {
     if (file_name[i] == '.')
-      dot_idx = i;
+      last_dot_idx = i;
   }
 
   if (basename) {
-    *basename = arena_alloc(arena, dot_idx);
-    (*basename)[dot_idx] = '\0';
-    memcpy(*basename, file_name, dot_idx);
+    *basename = arena_alloc(arena, last_dot_idx);
+    (*basename)[last_dot_idx] = '\0';
+    memcpy(*basename, file_name, last_dot_idx);
   }
   if (ext) {
-    if (dot_idx >= n - 1)
+    if (last_dot_idx >= n - 1) {
       *ext = "";
-    size_t ext_len = n - dot_idx;
-    *ext = arena_alloc(arena, ext_len + 1);
-    (*ext)[ext_len] = '\0';
-    memcpy(ext, file_name + dot_idx - 1, ext_len);
+    } else {
+      size_t ext_len = n - last_dot_idx;
+      *ext = arena_alloc(arena, ext_len + 1);
+      (*ext)[ext_len] = '\0';
+      memcpy(*ext, file_name + last_dot_idx + 1, ext_len);
+    }
   }
 }
 
-int list_vm_files(const char *path, Arena *arena, char **out_ls) {
-  DIR *dir = opendir(path);
-  if (dir == nullptr)
-    return -1;
-
+int list_vm_files(DIR *dir, Arena *arena, size_t *out_ls_len, char ***out_ls) {
   struct FilePathList {
-    char *items;
+    char **items;
     size_t count;
     size_t capacity;
   };
@@ -81,12 +77,16 @@ int list_vm_files(const char *path, Arena *arena, char **out_ls) {
       break;
     if (entry->d_type == DT_REG) {
       char *ext = nullptr;
-      path_basename(entry->d_name, arena, nullptr, &ext);
-      if (strcmp(ext, "vm") == 0) arena_da_append(arena, &ls, )
+      file_basename(entry->d_name, arena, nullptr, &ext);
+      if (strncmp(ext, "vm", 2) == 0) {
+        arena_da_append(arena, &ls, entry->d_name);
+      }
     }
   }
 
-  closedir(dir);
+  *out_ls = ls.items;
+  *out_ls_len = ls.count;
+  return 0;
 }
 
 int main(int argc, char *argv[argc]) {
@@ -105,8 +105,17 @@ int main(int argc, char *argv[argc]) {
   Arena scratch = {0};
 
   if (S_ISDIR(st.st_mode)) {
-    char *vm_file_paths = nullptr;
-    list_vm_files(vm_input_path, &scratch, &vm_file_paths);
+    DIR *dir = opendir(vm_input_path);
+    if (dir == nullptr) {
+      closedir(dir);
+      goto cleanup;
+    }
+
+    char **vm_file_paths = nullptr;
+    size_t vm_file_path_len = 0;
+    list_vm_files(dir, &scratch, &vm_file_path_len, &vm_file_paths);
+
+    closedir(dir);
     goto cleanup;
   } else if (S_ISREG(st.st_mode)) {
   }
@@ -116,7 +125,7 @@ int main(int argc, char *argv[argc]) {
   path_split(vm_input_path, &scratch, &vm_file_dir, &vm_file_name);
 
   char *vm_file_name_no_ext = nullptr;
-  path_basename(vm_input_path, &scratch, &vm_file_name_no_ext);
+  file_basename(vm_file_name, &scratch, &vm_file_name_no_ext, nullptr);
   const char *asm_file_path =
       arena_sprintf(&scratch, "%s%s.asm", vm_file_dir, vm_file_name_no_ext);
 
