@@ -761,7 +761,8 @@ void translator_deinit(Translator *t) {
 }
 
 static const char *translator_gen_label(Translator *t) {
-  return arena_sprintf(&t->line_arena, "L%zu", t->_label_idx++);
+  return arena_sprintf(&t->line_arena, "%s$L%zu", t->_file_name,
+                       t->_label_idx++);
 }
 
 static int translator_translate_push(Translator *t, CommandPushArgs args,
@@ -986,52 +987,54 @@ static int translator_translate_cmd(Translator *t, Command cmd, char **out) {
     const char *return_addr =
         translator_next_retaddr(t, args.fn_name_len, args.fn_name);
 
-    *out = arena_sprintf(arena,
-                         "@%s\n" // push return address, current value of LCL, ARGS, THIS, THAT to stack
-                         "D=A\n"
-                         "@SP\n"
-                         "AM=M+1\n"
-                         "A=A-1\n"
-                         "M=D\n"
-                         "@LCL\n"
-                         "D=M\n"
-                         "@SP\n"
-                         "AM=M+1\n"
-                         "A=A-1\n"
-                         "M=D\n"
-                         "@ARG\n"
-                         "D=M\n"
-                         "@SP\n"
-                         "AM=M+1\n"
-                         "A=A-1\n"
-                         "M=D\n"
-                         "@THIS\n"
-                         "D=M\n"
-                         "@SP\n"
-                         "AM=M+1\n"
-                         "A=A-1\n"
-                         "M=D\n"
-                         "@THAT\n"
-                         "D=M\n"
-                         "@SP\n"
-                         "AM=M+1\n"
-                         "A=A-1\n"
-                         "M=D\n"
-                         "@%zu\n" // *ARG = *SP - frame_size - number of arguments
-                         "D=A\n"
-                         "@SP\n"
-                         "D=M-D\n"
-                         "@ARG\n"
-                         "M=D\n"
-                         "@SP\n" // *LCL = *SP
-                         "D=M\n"
-                         "@LCL\n"
-                         "M=D\n"
-                         "@%.*s\n" // jump to the target function
-                         "0;JMP\n"
-                         "(%s)\n",
-                         return_addr, FN_FRAME_SIZE + args.n_args,
-                         (int)args.fn_name_len, args.fn_name, return_addr);
+    *out =
+        arena_sprintf(arena,
+                      "@%s\n" // push return address, current value of LCL,
+                              // ARGS, THIS, THAT to stack
+                      "D=A\n"
+                      "@SP\n"
+                      "AM=M+1\n"
+                      "A=A-1\n"
+                      "M=D\n"
+                      "@LCL\n"
+                      "D=M\n"
+                      "@SP\n"
+                      "AM=M+1\n"
+                      "A=A-1\n"
+                      "M=D\n"
+                      "@ARG\n"
+                      "D=M\n"
+                      "@SP\n"
+                      "AM=M+1\n"
+                      "A=A-1\n"
+                      "M=D\n"
+                      "@THIS\n"
+                      "D=M\n"
+                      "@SP\n"
+                      "AM=M+1\n"
+                      "A=A-1\n"
+                      "M=D\n"
+                      "@THAT\n"
+                      "D=M\n"
+                      "@SP\n"
+                      "AM=M+1\n"
+                      "A=A-1\n"
+                      "M=D\n"
+                      "@%zu\n" // *ARG = *SP - frame_size - number of arguments
+                      "D=A\n"
+                      "@SP\n"
+                      "D=M-D\n"
+                      "@ARG\n"
+                      "M=D\n"
+                      "@SP\n" // *LCL = *SP
+                      "D=M\n"
+                      "@LCL\n"
+                      "M=D\n"
+                      "@%.*s\n" // jump to the target function
+                      "0;JMP\n"
+                      "(%s)\n",
+                      return_addr, FN_FRAME_SIZE + args.n_args,
+                      (int)args.fn_name_len, args.fn_name, return_addr);
     return 0;
   }
   case CMD_FUNC:
@@ -1045,29 +1048,29 @@ static int translator_translate_cmd(Translator *t, Command cmd, char **out) {
     const char *loop_label = translator_gen_label(t);
     const char *loop_end_label = translator_gen_label(t);
     // TODO: incorrect return value pushing + go to return address logic.
-    *out = arena_sprintf(
-        &t->line_arena,
-        "(%.*s)\n" // fn name
-        "@%zu\n"
-        "D=A\n"
-        "@R13\n"
-        "M=D\n"
-        "(%s)\n"  // loop start
-        "@R13\n"
-        "D=M\n"
-        "@%s\n" // loop end
-        "D;JEQ\n"
-        "@SP\n"
-        "AM=M+1\n"
-        "A=A-1\n"
-        "M=0\n"
-        "@R13\n"
-        "M=M-1\n"
-        "@%s\n" // loop start
-        "0;JMP\n"
-        "(%s)\n", // loop end
-        (int)args.fn_name_len, args.fn_name, args.n_vars, loop_label,
-        loop_end_label, loop_label, loop_end_label);
+    *out =
+        arena_sprintf(&t->line_arena,
+                      "(%.*s)\n" // fn name
+                      "@%zu\n"
+                      "D=A\n"
+                      "@R13\n"
+                      "M=D\n"
+                      "(%s)\n" // loop start
+                      "@R13\n"
+                      "D=M\n"
+                      "@%s\n" // loop end
+                      "D;JEQ\n"
+                      "@SP\n"
+                      "AM=M+1\n"
+                      "A=A-1\n"
+                      "M=0\n"
+                      "@R13\n"
+                      "M=M-1\n"
+                      "@%s\n" // loop start
+                      "0;JMP\n"
+                      "(%s)\n", // loop end
+                      (int)args.fn_name_len, args.fn_name, args.n_vars,
+                      loop_label, loop_end_label, loop_label, loop_end_label);
     return 0;
   case CMD_RET:
     *out = "@ARG\n"
