@@ -1,3 +1,4 @@
+#define _POSIX_C_SOURCE 200809L
 #include <ctype.h>
 #include <errno.h>
 #include <stdarg.h>
@@ -1129,9 +1130,8 @@ static int translator_translate_cmd(Translator *t, Command cmd, char **out) {
 }
 
 int translator_translate(Translator *t, FILE *in, FILE *out) {
-  arena_reset(&t->line_arena);
-
   while (true) {
+    arena_reset(&t->line_arena);
     char *line = nullptr;
     size_t line_len = 0;
     int res = readline(in, &t->line_arena, &line, &line_len);
@@ -1162,11 +1162,30 @@ int translator_translate(Translator *t, FILE *in, FILE *out) {
     if (fputs(hack, out) == EOF && ferror(out)) {
       return error_set("cannot write to destination: %s", strerror(errno));
     }
-
-    arena_reset(&t->line_arena);
   }
 
   return 0;
+}
+
+int translator_bootstrap(Translator *t, FILE *out) {
+  const char *bootstrap_asm = "@256\nD=A\n@SP\nM=D\n";
+  const char *bootstrap_vm = "call Sys.init 0\n";
+  FILE *bootstrap_vm_file =
+      fmemopen((void *)bootstrap_vm, strlen(bootstrap_vm), "r");
+
+  int retval = -1;
+  if (fputs(bootstrap_asm, out) == EOF) {
+    goto cleanup;
+  }
+
+  if (translator_translate(t, bootstrap_vm_file, out) != 0) {
+    error_set("cannot translate bootstrap vm");
+    goto cleanup;
+  }
+  retval = 0;
+cleanup:
+  fclose(bootstrap_vm_file);
+  return retval;
 }
 
 typedef struct {
@@ -1182,22 +1201,19 @@ typedef struct {
  */
 int translate(size_t in_files_len, VmInputFile in_files[in_files_len],
               FILE *out) {
-  fputs("@256\n"
-        "D=A\n"
-        "@SP\n"
-        "M=D\n"
-        "@Sys.init\n"
-        "0;JMP\n",
-        out);
-
   Translator code_translator = {0};
   int res = 0;
   for (size_t i = 0; i < in_files_len; i++) {
     translator_init(&code_translator, in_files[i].symbol_prefix);
+    if (i == 0) {
+      // TODO: add error handling
+      res = translator_bootstrap(&code_translator, out);
+    }
     res = translator_translate(&code_translator, in_files[i].f, out);
     translator_deinit(&code_translator);
-    if (res != 0)
+    if (res != 0) {
       return res;
+    }
   }
 
   return 0;
