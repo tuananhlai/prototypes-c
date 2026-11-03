@@ -91,6 +91,7 @@ int list_vm_files(const char *dir_path, Arena *arena, size_t *out_ls_len,
       char *ext = nullptr;
       file_basename(entry->d_name, arena, nullptr, &ext);
       if (strncmp(ext, "vm", 2) == 0) {
+        // TODO: normalize file path
         snprintf(file_path, sizeof(file_path), "%s/%s", dir_path,
                  entry->d_name);
         FILE *input_file = fopen(file_path, "r");
@@ -139,6 +140,16 @@ int main(int argc, char *argv[argc]) {
     res = list_vm_files(vm_input_path, &scratch, &in_files_len, &in_files);
     if (res != 0)
       goto cleanup;
+
+    // TODO: normalize path
+    const char *asm_file_path =
+        arena_sprintf(&scratch, "%s/out.asm", vm_input_path);
+    out_file = fopen(asm_file_path, "w");
+    if (!out_file) {
+      perror("open asm file for writing");
+      goto cleanup;
+    }
+    static_var_prefix = "Sys";
   } else if (S_ISREG(st.st_mode)) {
     FILE *in_file = fopen(vm_input_path, "r");
     if (!in_file) {
@@ -170,6 +181,7 @@ int main(int argc, char *argv[argc]) {
   }
 
   for (size_t i = 0; i < in_files_len; i++) {
+    // FIXME: static_var_prefix -> the given file base name.
     if (translate(static_var_prefix, in_files[i], out_file) != 0) {
       fprintf(stderr, "translating %s: %s", vm_input_path, error_get());
     }
