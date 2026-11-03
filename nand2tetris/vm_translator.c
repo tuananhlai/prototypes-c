@@ -1169,17 +1169,36 @@ int translator_translate(Translator *t, FILE *in, FILE *out) {
   return 0;
 }
 
+typedef struct {
+  FILE *f;
+  // A string to be used as prefixes for label & variables within
+  // the translated ASM code.
+  const char *symbol_prefix;
+} VmInputFile;
+
 /**
- * Translate the given VM language stream into Hack Assembly and write
- * the output to the given destination.
+ * Translate the given .vm files into Hack Assembly and write all results to
+ * `out` with the necessary bootstrap code.
  */
-int translate(const char *in_file_name, FILE *in, FILE *out) {
-  int res = 0;
+int translate(size_t in_files_len, VmInputFile in_files[in_files_len],
+              FILE *out) {
+  fputs("@256\n"
+        "D=A\n"
+        "@SP\n"
+        "M=D\n"
+        "@Sys.init\n"
+        "0;JMP\n",
+        out);
 
   Translator code_translator = {0};
-  translator_init(&code_translator, in_file_name);
-  res = translator_translate(&code_translator, in, out);
-  translator_deinit(&code_translator);
+  int res = 0;
+  for (size_t i = 0; i < in_files_len; i++) {
+    translator_init(&code_translator, in_files[i].symbol_prefix);
+    res = translator_translate(&code_translator, in_files[i].f, out);
+    translator_deinit(&code_translator);
+    if (res != 0)
+      return res;
+  }
 
-  return res;
+  return 0;
 }

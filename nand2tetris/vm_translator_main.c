@@ -34,8 +34,9 @@ void path_split(const char *file_path, Arena *arena, char **path,
   }
 }
 
-void file_basename(const char *file_name, Arena *arena, char **basename,
-                   char **ext) {
+/** Split the given file name ("sample.txt") into its stem and extension. */
+void splitext(const char *file_name, Arena *arena, char **basename,
+              char **ext) {
   size_t n = strlen(file_name);
   size_t last_dot_idx = n;
 
@@ -61,11 +62,6 @@ void file_basename(const char *file_name, Arena *arena, char **basename,
     }
   }
 }
-
-typedef struct {
-  FILE *f;
-  const char *base_name;
-} VmInputFile;
 
 /**
  * List all files with extension .vm from the given directory. The output string
@@ -97,7 +93,7 @@ int list_vm_files(const char *dir_path, Arena *arena, size_t *out_ls_len,
     if (entry->d_type == DT_REG) {
       char *base_name = nullptr;
       char *ext = nullptr;
-      file_basename(entry->d_name, arena, &base_name, &ext);
+      splitext(entry->d_name, arena, &base_name, &ext);
       if (strncmp(ext, "vm", 2) == 0) {
         // TODO: normalize file path
         snprintf(file_path, sizeof(file_path), "%s/%s", dir_path,
@@ -109,7 +105,7 @@ int list_vm_files(const char *dir_path, Arena *arena, size_t *out_ls_len,
         }
 
         VmInputFile vif = {
-            .base_name = base_name,
+            .symbol_prefix = base_name,
             .f = input_file,
         };
         arena_da_append(arena, &ls, vif);
@@ -144,11 +140,16 @@ int main(int argc, char *argv[argc]) {
     return EXIT_FAILURE;
   }
 
+  int retval = EXIT_FAILURE;
   Arena scratch = {0};
   VmInputFile *in_files = nullptr;
   size_t in_files_len = 0;
   FILE *out_file = nullptr;
   int res;
+
+  char *parent_dir = nullptr;
+  char *basename = nullptr;
+  path_split(vm_input_path, &scratch, &parent_dir, &basename);
 
   if (S_ISDIR(st.st_mode)) {
     res = list_vm_files(vm_input_path, &scratch, &in_files_len, &in_files);
@@ -156,7 +157,7 @@ int main(int argc, char *argv[argc]) {
       goto cleanup;
 
     const char *asm_file_path =
-        arena_sprintf(&scratch, "%s/out.asm", vm_input_path);
+        arena_sprintf(&scratch, "%s/%s.asm", vm_input_path, basename);
     out_file = fopen(asm_file_path, "w");
     if (!out_file) {
       perror("open asm file for writing");
@@ -169,20 +170,17 @@ int main(int argc, char *argv[argc]) {
       goto cleanup;
     }
 
-    char *vm_file_dir = nullptr;
-    char *vm_file_name = nullptr;
-    path_split(vm_input_path, &scratch, &vm_file_dir, &vm_file_name);
-    char *vm_file_name_no_ext = nullptr;
-    file_basename(vm_file_name, &scratch, &vm_file_name_no_ext, nullptr);
-    in_files = arena_alloc(&scratch, sizeof(FILE *));
+    char *filename_stem = nullptr;
+    splitext(basename, &scratch, &filename_stem, nullptr);
+    in_files = arena_alloc(&scratch, sizeof(VmInputFile));
     in_files[0] = (VmInputFile){
-        .base_name = vm_file_name_no_ext,
+        .symbol_prefix = filename_stem,
         .f = in_file,
     };
     in_files_len = 1;
 
     const char *asm_file_path =
-        arena_sprintf(&scratch, "%s%s.asm", vm_file_dir, vm_file_name_no_ext);
+        arena_sprintf(&scratch, "%s%s.asm", parent_dir, filename_stem);
     out_file = fopen(asm_file_path, "w");
     if (!out_file) {
       perror("open asm file for writing");
@@ -194,11 +192,11 @@ int main(int argc, char *argv[argc]) {
     goto cleanup;
   }
 
-  for (size_t i = 0; i < in_files_len; i++) {
-    if (translate(in_files[i].base_name, in_files[i].f, out_file) != 0) {
-      fprintf(stderr, "translating %s: %s", vm_input_path, error_get());
-    }
+  if (translate(in_files_len, in_files, out_file) != 0) {
+    fprintf(stderr, "translating %s: %s", vm_input_path, error_get());
+    goto cleanup;
   }
+  retval = EXIT_SUCCESS;
 
 cleanup:
   if (out_file)
@@ -207,6 +205,5 @@ cleanup:
     fclose(in_files[i].f);
   }
   arena_free(&scratch);
-
-  return EXIT_SUCCESS;
+  return retval;
 }

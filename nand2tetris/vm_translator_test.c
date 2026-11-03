@@ -239,13 +239,13 @@ void test_translate() {
                            "@SP\n"
                            "AM=M-1\n"
                            "D=M-D\n"
-                           "@L0\n"
+                           "@Test$L0\n"
                            "D;JEQ\n"
-                           "@L1\n"
+                           "@Test$L1\n"
                            "D=0;JMP\n"
-                           "(L0)\n"
+                           "(Test$L0)\n"
                            "D=-1\n"
-                           "(L1)\n"
+                           "(Test$L1)\n"
                            "@SP\n"
                            "AM=M+1\n"
                            "A=A-1\n"
@@ -260,13 +260,13 @@ void test_translate() {
                            "@SP\n"
                            "AM=M-1\n"
                            "D=M-D\n"
-                           "@L0\n"
+                           "@Test$L0\n"
                            "D;JGT\n"
-                           "@L1\n"
+                           "@Test$L1\n"
                            "D=0;JMP\n"
-                           "(L0)\n"
+                           "(Test$L0)\n"
                            "D=-1\n"
-                           "(L1)\n"
+                           "(Test$L1)\n"
                            "@SP\n"
                            "AM=M+1\n"
                            "A=A-1\n"
@@ -281,13 +281,13 @@ void test_translate() {
                            "@SP\n"
                            "AM=M-1\n"
                            "D=M-D\n"
-                           "@L0\n"
+                           "@Test$L0\n"
                            "D;JLT\n"
-                           "@L1\n"
+                           "@Test$L1\n"
                            "D=0;JMP\n"
-                           "(L0)\n"
+                           "(Test$L0)\n"
                            "D=-1\n"
-                           "(L1)\n"
+                           "(Test$L1)\n"
                            "@SP\n"
                            "AM=M+1\n"
                            "A=A-1\n"
@@ -429,7 +429,7 @@ void test_translate() {
               "M=D\n"
               "@Sys.main\n" // jump to the target function
               "0;JMP\n"
-              "(Sys.main$ret.0)",
+              "(Sys.main$ret.0)\n",
       },
       {
           .name = "should translate function declaration",
@@ -438,19 +438,21 @@ void test_translate() {
                            "@2\n"
                            "D=A\n"
                            "@R13\n"
-                           "M=D-1\n"
-                           "(L0)\n"
+                           "M=D\n"
+                           "(Test$L0)\n"
                            "@R13\n"
                            "D=M\n"
-                           "@L1\n"
+                           "@Test$L1\n"
                            "D;JEQ\n"
                            "@SP\n"
                            "AM=M+1\n"
                            "A=A-1\n"
                            "M=0\n"
-                           "@L0\n"
+                           "@R13\n"
+                           "M=M-1\n"
+                           "@Test$L0\n"
                            "0;JMP\n"
-                           "(L1)\n",
+                           "(Test$L1)\n",
       },
       {
           .name =
@@ -464,19 +466,21 @@ void test_translate() {
                            "@0\n"
                            "D=A\n"
                            "@R13\n"
-                           "M=D-1\n"
-                           "(L0)\n"
+                           "M=D\n"
+                           "(Test$L0)\n"
                            "@R13\n"
                            "D=M\n"
-                           "@L1\n"
+                           "@Test$L1\n"
                            "D;JEQ\n"
                            "@SP\n"
                            "AM=M+1\n"
                            "A=A-1\n"
                            "M=0\n"
-                           "@L0\n"
+                           "@R13\n"
+                           "M=M-1\n"
+                           "@Test$L0\n"
                            "0;JMP\n"
-                           "(L1)\n"
+                           "(Test$L1)\n"
                            "@ARG\n"
                            "D=M\n"
                            "@0\n"
@@ -507,6 +511,10 @@ void test_translate() {
                            "A=A-1\n"
                            "M=D\n"
                            "(Test$END)\n"
+                           "@ARG\n"
+                           "D=M\n"
+                           "@R15\n"
+                           "M=D\n"
                            "@SP\n"
                            "AM=M-1\n"
                            "D=M\n"
@@ -539,7 +547,7 @@ void test_translate() {
                            "D=M\n"
                            "@R14\n"
                            "M=D\n"
-                           "@ARG\n"
+                           "@R15\n"
                            "D=M\n"
                            "@SP\n"
                            "M=D\n"
@@ -550,6 +558,7 @@ void test_translate() {
                            "A=A-1\n"
                            "M=D\n"
                            "@R14\n"
+                           "A=M\n"
                            "0;JMP\n",
       },
       {
@@ -587,11 +596,15 @@ void test_translate() {
     size_t out_len = 0;
     FILE *out = open_memstream(&out_buf, &out_len);
 
-    int res = translate("Test", in, out);
+    Translator t = {0};
+    translator_init(&t, "Test");
+    int res = translator_translate(&t, in, out);
+    translator_deinit(&t);
     fclose(in);
     fclose(out);
 
-    if (!TEST_CHECK_(res == 0, "[case %zu] translate() succeeded", i)) {
+    if (!TEST_CHECK_(res == 0, "[case %zu] translator_translate() succeeded",
+                     i)) {
       TEST_MSG("error: %s", error_get());
       free(out_buf);
       continue;
