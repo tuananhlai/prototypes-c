@@ -62,6 +62,10 @@ void file_basename(const char *file_name, Arena *arena, char **basename,
   }
 }
 
+/**
+ * List all files with extension .vm from the given directory. The output string
+ * array will be allocated from the given arena allocator.
+ */
 int list_vm_files(DIR *dir, Arena *arena, size_t *out_ls_len, char ***out_ls) {
   struct FilePathList {
     char **items;
@@ -103,6 +107,11 @@ int main(int argc, char *argv[argc]) {
   }
 
   Arena scratch = {0};
+  struct {
+    FILE **items;
+    size_t count;
+    size_t capacity;
+  } in_files;
 
   if (S_ISDIR(st.st_mode)) {
     DIR *dir = opendir(vm_input_path);
