@@ -66,15 +66,23 @@ void file_basename(const char *file_name, Arena *arena, char **basename,
  * List all files with extension .vm from the given directory. The output string
  * array will be allocated from the given arena allocator.
  */
-int list_vm_files(DIR *dir, Arena *arena, size_t *out_ls_len, char ***out_ls) {
-  struct FilePathList {
-    char **items;
+int list_vm_files(const char *dir_path, Arena *arena, size_t *out_ls_len,
+                  FILE ***out_ls) {
+  DIR *dir = opendir(dir_path);
+  if (dir == nullptr)
+    return -1;
+
+  struct FileList {
+    FILE **items;
     size_t count;
     size_t capacity;
   };
-  struct FilePathList ls = {0};
+  struct FileList ls = {0};
 
+  int retval = -1;
+  char file_path[1024];
   struct dirent *entry;
+  bool fopen_all_succeeded = true;
   while (true) {
     entry = readdir(dir);
     if (entry == nullptr)
@@ -83,14 +91,28 @@ int list_vm_files(DIR *dir, Arena *arena, size_t *out_ls_len, char ***out_ls) {
       char *ext = nullptr;
       file_basename(entry->d_name, arena, nullptr, &ext);
       if (strncmp(ext, "vm", 2) == 0) {
-        arena_da_append(arena, &ls, entry->d_name);
+        snprintf(file_path, sizeof(file_path), "%s/%s", dir_path,
+                 entry->d_name);
+        FILE *input_file = fopen(file_path, "r");
+        if (!input_file) {
+          fopen_all_succeeded = false;
+          goto cleanup;
+        }
       }
     }
   }
 
   *out_ls = ls.items;
   *out_ls_len = ls.count;
-  return 0;
+  retval = 0;
+cleanup:
+  if (!fopen_all_succeeded) {
+    for (size_t i = 0; i < ls.count; i++) {
+      fclose(ls.items[i]);
+    }
+  }
+  closedir(dir);
+  return retval;
 }
 
 int main(int argc, char *argv[argc]) {
@@ -107,58 +129,58 @@ int main(int argc, char *argv[argc]) {
   }
 
   Arena scratch = {0};
-  struct {
-    FILE **items;
-    size_t count;
-    size_t capacity;
-  } in_files;
+  FILE **in_files = nullptr;
+  size_t in_files_len = 0;
+  FILE *out_file = nullptr;
+  char *static_var_prefix = nullptr;
+  int res;
 
   if (S_ISDIR(st.st_mode)) {
-    DIR *dir = opendir(vm_input_path);
-    if (dir == nullptr) {
-      closedir(dir);
+    res = list_vm_files(vm_input_path, &scratch, &in_files_len, &in_files);
+    if (res != 0)
+      goto cleanup;
+  } else if (S_ISREG(st.st_mode)) {
+    FILE *in_file = fopen(vm_input_path, "r");
+    if (!in_file) {
+      perror("open single file");
       goto cleanup;
     }
 
-    char **vm_file_paths = nullptr;
-    size_t vm_file_path_len = 0;
-    list_vm_files(dir, &scratch, &vm_file_path_len, &vm_file_paths);
+    in_files = arena_alloc(&scratch, sizeof(FILE *));
+    in_files[0] = in_file;
+    in_files_len = 1;
 
-    closedir(dir);
-    goto cleanup;
-  } else if (S_ISREG(st.st_mode)) {
-  }
-
-  char *vm_file_dir = nullptr;
-  char *vm_file_name = nullptr;
-  path_split(vm_input_path, &scratch, &vm_file_dir, &vm_file_name);
-
-  char *vm_file_name_no_ext = nullptr;
-  file_basename(vm_file_name, &scratch, &vm_file_name_no_ext, nullptr);
-  const char *asm_file_path =
-      arena_sprintf(&scratch, "%s%s.asm", vm_file_dir, vm_file_name_no_ext);
-
-  FILE *infile = fopen(vm_input_path, "r");
-  FILE *outfile = fopen(asm_file_path, "w");
-
-  if (!infile) {
-    perror(vm_input_path);
-    goto cleanup;
-  }
-  if (!outfile) {
-    perror(asm_file_path);
+    char *vm_file_dir = nullptr;
+    char *vm_file_name = nullptr;
+    path_split(vm_input_path, &scratch, &vm_file_dir, &vm_file_name);
+    char *vm_file_name_no_ext = nullptr;
+    file_basename(vm_file_name, &scratch, &vm_file_name_no_ext, nullptr);
+    const char *asm_file_path =
+        arena_sprintf(&scratch, "%s%s.asm", vm_file_dir, vm_file_name_no_ext);
+    out_file = fopen(asm_file_path, "w");
+    if (!out_file) {
+      perror("open asm file for writing");
+      goto cleanup;
+    }
+    static_var_prefix = vm_file_name_no_ext;
+  } else {
+    fprintf(stderr, "invalid input: expected directory or file, got %d\n",
+            st.st_mode);
     goto cleanup;
   }
 
-  if (translate(vm_file_name_no_ext, infile, outfile) != 0) {
-    fprintf(stderr, "translating %s: %s", vm_input_path, error_get());
+  for (size_t i = 0; i < in_files_len; i++) {
+    if (translate(static_var_prefix, in_files[i], out_file) != 0) {
+      fprintf(stderr, "translating %s: %s", vm_input_path, error_get());
+    }
   }
 
-  if (outfile)
-    fclose(outfile);
-  if (infile)
-    fclose(infile);
 cleanup:
+  if (out_file)
+    fclose(out_file);
+  for (size_t i = 0; i < in_files_len; i++) {
+    fclose(in_files[i]);
+  }
   arena_free(&scratch);
 
   return EXIT_SUCCESS;
