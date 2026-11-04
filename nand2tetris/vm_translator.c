@@ -893,40 +893,34 @@ static int translator_translate_cmd(Translator *t, Command cmd, char **out) {
   case CMD_OR: {
     const char *set_data_reg_cmd;
     if (cmd.kind == CMD_ADD)
-      set_data_reg_cmd = "D=D+M";
+      set_data_reg_cmd = "M=D+M";
     else if (cmd.kind == CMD_SUB)
-      set_data_reg_cmd = "D=M-D";
+      set_data_reg_cmd = "M=M-D";
     else if (cmd.kind == CMD_AND)
-      set_data_reg_cmd = "D=D&M";
+      set_data_reg_cmd = "M=D&M";
     else
-      set_data_reg_cmd = "D=D|M";
+      set_data_reg_cmd = "M=D|M";
 
-    // pop the top two value of the stack, add them together and put the result
-    // in the D register.
-    const char *hack_assembly_calc = arena_sprintf(
-        arena, "@SP\nAM=M-1\nD=M\n@SP\nAM=M-1\n%s\n", set_data_reg_cmd);
-    *out = arena_sprintf(arena, "%s%s", hack_assembly_calc, hack_asm_push);
+    *out = arena_sprintf(arena, "@SP\nAM=M-1\nD=M\n@SP\nA=M-1\n%s\n",
+                         set_data_reg_cmd);
+    ;
     return 0;
   }
   case CMD_NEG:
   case CMD_NOT: {
     const char *set_data_reg_cmd;
     if (cmd.kind == CMD_NEG)
-      set_data_reg_cmd = "D=-M";
+      set_data_reg_cmd = "M=-M";
     else
-      set_data_reg_cmd = "D=!M";
+      set_data_reg_cmd = "M=!M";
 
-    const char *hack_assembly_calc =
-        arena_sprintf(arena, "@SP\nAM=M-1\n%s\n", set_data_reg_cmd);
-    *out = arena_sprintf(arena, "%s%s", hack_assembly_calc, hack_asm_push);
+    *out = arena_sprintf(arena, "@SP\nA=M-1\n%s\n", set_data_reg_cmd);
     return 0;
   }
   case CMD_EQ:
   case CMD_GT:
   case CMD_LT: {
-    const char *push_true_label = translator_gen_label(t);
-    const char *push_false_label = translator_gen_label(t);
-
+    const char *keep_true_label = translator_gen_label(t);
     const char *conditional_jmp;
     if (cmd.kind == CMD_EQ)
       conditional_jmp = "JEQ";
@@ -941,17 +935,14 @@ static int translator_translate_cmd(Translator *t, Command cmd, char **out) {
                       "AM=M-1\n"
                       "D=M\n"
                       "@SP\n"
-                      "AM=M-1\n"
+                      "A=M-1\n"
                       "D=M-D\n"
+                      "M=-1\n"
                       "@%s\n"  // push true
                       "D;%s\n" // conditional jump command
-                      "@%s\n"  // push false
-                      "D=0;JMP\n"
-                      "(%s)\n" // push true
-                      "D=-1\n"
+                      "M=0\n"
                       "(%s)\n", // push false
-                      push_true_label, conditional_jmp, push_false_label,
-                      push_true_label, push_false_label);
+                      keep_true_label, conditional_jmp, keep_true_label);
     *out = arena_sprintf(arena, "%s%s", hack_assembly_compare, hack_asm_push);
     return 0;
   }
@@ -1044,7 +1035,6 @@ static int translator_translate_cmd(Translator *t, Command cmd, char **out) {
 
     const char *loop_label = translator_gen_label(t);
     const char *loop_end_label = translator_gen_label(t);
-    // TODO: incorrect return value pushing + go to return address logic.
     *out =
         arena_sprintf(&t->_line_arena,
                       "(%.*s)\n" // fn name
