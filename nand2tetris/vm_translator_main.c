@@ -145,6 +145,7 @@ int main(int argc, char *argv[argc]) {
   VmInputFile *in_files = nullptr;
   size_t in_files_len = 0;
   FILE *out_file = nullptr;
+  Translator code_translator = {0};
   int res;
 
   char *parent_dir = nullptr;
@@ -192,13 +193,15 @@ int main(int argc, char *argv[argc]) {
     goto cleanup;
   }
 
-  if (translate(in_files_len, in_files, out_file) != 0) {
+  translator_init(&code_translator);
+  if (translator_translate(&code_translator, in_files_len, in_files, out_file) != 0) {
     fprintf(stderr, "translating %s: %s", vm_input_path, error_get());
     goto cleanup;
   }
   retval = EXIT_SUCCESS;
 
 cleanup:
+  translator_deinit(&code_translator);
   if (out_file)
     fclose(out_file);
   for (size_t i = 0; i < in_files_len; i++) {

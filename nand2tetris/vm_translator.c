@@ -731,44 +731,40 @@ static int readline(FILE *fp, Arena *arena, char **out, size_t *out_len) {
 }
 
 typedef struct {
-  Lexer lexer;
-  Parser parser;
+  Lexer _lexer;
+  Parser _parser;
   // Reset after parsing each line of VM code.
-  Arena line_arena;
-  // Destroy once when Translator is destroyed.
-  Arena perm_arena;
-  const char *_file_name;
+  Arena _line_arena;
+  // Prefix string for symbols within a file.
+  const char *_symbol_prefix;
   // Name of the function for which we're currently processing commands.
   char *_cur_func_name;
   // Counter used to generate unique internal labels.
   size_t _label_idx;
 } Translator;
 
-void translator_init(Translator *t, const char *file_name) {
-  t->lexer = (Lexer){0};
-  lexer_init(&t->lexer);
-  t->parser = (Parser){0};
-  parser_init(&t->parser);
-  t->line_arena = (Arena){0};
-  t->_file_name = file_name;
-  t->_cur_func_name = nullptr;
-  t->_label_idx = 0;
+void translator_init(Translator *t) {
+  t->_lexer = (Lexer){0};
+  lexer_init(&t->_lexer);
+  t->_parser = (Parser){0};
+  parser_init(&t->_parser);
+  t->_line_arena = (Arena){0};
 }
 
 void translator_deinit(Translator *t) {
   free(t->_cur_func_name);
-  lexer_deinit(&t->lexer);
-  arena_free(&t->line_arena);
+  lexer_deinit(&t->_lexer);
+  arena_free(&t->_line_arena);
 }
 
 static const char *translator_gen_label(Translator *t) {
-  return arena_sprintf(&t->line_arena, "%s$L%zu", t->_file_name,
+  return arena_sprintf(&t->_line_arena, "%s$L%zu", t->_symbol_prefix,
                        t->_label_idx++);
 }
 
 static int translator_translate_push(Translator *t, CommandPushArgs args,
                                      char **out) {
-  Arena *arena = &t->line_arena;
+  Arena *arena = &t->_line_arena;
 
   switch (args.segment) {
   case MS_ARGUMENT: {
@@ -782,8 +778,8 @@ static int translator_translate_push(Translator *t, CommandPushArgs args,
     return 0;
   }
   case MS_STATIC: {
-    *out = arena_sprintf(arena, "@%s.%zu\nD=M\n%s", t->_file_name, args.index,
-                         hack_asm_push);
+    *out = arena_sprintf(arena, "@%s.%zu\nD=M\n%s", t->_symbol_prefix,
+                         args.index, hack_asm_push);
     return 0;
   }
   case MS_CONSTANT: {
@@ -822,7 +818,7 @@ static int translator_translate_push(Translator *t, CommandPushArgs args,
 
 static int translator_translate_pop(Translator *t, CommandPopArgs args,
                                     char **out) {
-  Arena *arena = &t->line_arena;
+  Arena *arena = &t->_line_arena;
 
   switch (args.segment) {
   case MS_LOCAL:
@@ -857,8 +853,8 @@ static int translator_translate_pop(Translator *t, CommandPopArgs args,
     return 0;
   }
   case MS_STATIC: {
-    *out = arena_sprintf(arena, "%s@%s.%zu\nM=D\n", hack_asm_pop, t->_file_name,
-                         args.index);
+    *out = arena_sprintf(arena, "%s@%s.%zu\nM=D\n", hack_asm_pop,
+                         t->_symbol_prefix, args.index);
     return 0;
   }
   default: {
@@ -869,22 +865,22 @@ static int translator_translate_pop(Translator *t, CommandPopArgs args,
 
 static const char *translator_next_retaddr(Translator *t, size_t n,
                                            const char fn_name[n]) {
-  return arena_sprintf(&t->line_arena, "%.*s$ret.%zu", (int)n, fn_name,
+  return arena_sprintf(&t->_line_arena, "%.*s$ret.%zu", (int)n, fn_name,
                        t->_label_idx++);
 }
 
 static const char *translator_get_label(Translator *t, size_t n,
                                         const char label[n]) {
   if (!t->_cur_func_name) {
-    return arena_sprintf(&t->line_arena, "%.*s", (int)n, label);
+    return arena_sprintf(&t->_line_arena, "%.*s", (int)n, label);
   }
 
-  return arena_sprintf(&t->line_arena, "%s$%.*s", t->_cur_func_name, (int)n,
+  return arena_sprintf(&t->_line_arena, "%s$%.*s", t->_cur_func_name, (int)n,
                        label);
 }
 
 static int translator_translate_cmd(Translator *t, Command cmd, char **out) {
-  Arena *arena = &t->line_arena;
+  Arena *arena = &t->_line_arena;
 
   switch (cmd.kind) {
   case CMD_PUSH:
@@ -1050,7 +1046,7 @@ static int translator_translate_cmd(Translator *t, Command cmd, char **out) {
     const char *loop_end_label = translator_gen_label(t);
     // TODO: incorrect return value pushing + go to return address logic.
     *out =
-        arena_sprintf(&t->line_arena,
+        arena_sprintf(&t->_line_arena,
                       "(%.*s)\n" // fn name
                       "@%zu\n"
                       "D=A\n"
@@ -1129,19 +1125,23 @@ static int translator_translate_cmd(Translator *t, Command cmd, char **out) {
   return error_set("unsupported command kind %d", cmd.kind);
 }
 
-int translator_translate(Translator *t, FILE *in, FILE *out) {
+int translator_translate_single(Translator *t, const char *symbol_prefix,
+                                FILE *in, FILE *out) {
+  t->_symbol_prefix = symbol_prefix;
+  t->_label_idx = 0;
+
   while (true) {
-    arena_reset(&t->line_arena);
+    arena_reset(&t->_line_arena);
     char *line = nullptr;
     size_t line_len = 0;
-    int res = readline(in, &t->line_arena, &line, &line_len);
+    int res = readline(in, &t->_line_arena, &line, &line_len);
     if (res == EOF)
       break;
     if (line_len == 0)
       continue;
 
     TokenList tokens = {0};
-    res = lexer_tokenize(&t->lexer, &t->line_arena, line_len, line, &tokens);
+    res = lexer_tokenize(&t->_lexer, &t->_line_arena, line_len, line, &tokens);
     if (res < 0) {
       return -1;
     }
@@ -1149,7 +1149,7 @@ int translator_translate(Translator *t, FILE *in, FILE *out) {
       continue;
 
     Command cmd = {0};
-    res = parser_parse_line(&t->parser, &tokens, &cmd);
+    res = parser_parse_line(&t->_parser, &tokens, &cmd);
     if (res < 0) {
       return -1;
     }
@@ -1167,27 +1167,6 @@ int translator_translate(Translator *t, FILE *in, FILE *out) {
   return 0;
 }
 
-int translator_bootstrap(Translator *t, FILE *out) {
-  const char *bootstrap_asm = "@256\nD=A\n@SP\nM=D\n";
-  const char *bootstrap_vm = "call Sys.init 0\n";
-  FILE *bootstrap_vm_file =
-      fmemopen((void *)bootstrap_vm, strlen(bootstrap_vm), "r");
-
-  int retval = -1;
-  if (fputs(bootstrap_asm, out) == EOF) {
-    goto cleanup;
-  }
-
-  if (translator_translate(t, bootstrap_vm_file, out) != 0) {
-    error_set("cannot translate bootstrap vm");
-    goto cleanup;
-  }
-  retval = 0;
-cleanup:
-  fclose(bootstrap_vm_file);
-  return retval;
-}
-
 typedef struct {
   FILE *f;
   // A string to be used as prefixes for label & variables within
@@ -1195,26 +1174,36 @@ typedef struct {
   const char *symbol_prefix;
 } VmInputFile;
 
-/**
- * Translate the given .vm files into Hack Assembly and write all results to
- * `out` with the necessary bootstrap code.
- */
-int translate(size_t in_files_len, VmInputFile in_files[in_files_len],
-              FILE *out) {
-  Translator code_translator = {0};
-  int res = 0;
+/** Translate the given input files and write the result to `out`. */
+int translator_translate(Translator *t, size_t in_files_len,
+                         VmInputFile in_files[in_files_len], FILE *out) {
+  const char *bootstrap_asm = "@256\nD=A\n@SP\nM=D\n";
+  const char *bootstrap_vm = "call Sys.init 0\n";
+  FILE *bootstrap_vm_file =
+      fmemopen((void *)bootstrap_vm, strlen(bootstrap_vm), "r");
+
+  int retval = -1;
+  if (fputs(bootstrap_asm, out) == EOF) {
+    error_set("cannot write bootstrap asm");
+    goto cleanup;
+  }
+
+  if (translator_translate_single(t, "", bootstrap_vm_file, out) < 0) {
+    error_set("cannot write bootstrap vm code");
+    goto cleanup;
+  }
+
   for (size_t i = 0; i < in_files_len; i++) {
-    translator_init(&code_translator, in_files[i].symbol_prefix);
-    if (i == 0) {
-      // TODO: add error handling
-      res = translator_bootstrap(&code_translator, out);
-    }
-    res = translator_translate(&code_translator, in_files[i].f, out);
-    translator_deinit(&code_translator);
-    if (res != 0) {
-      return res;
+    if (translator_translate_single(t, in_files[i].symbol_prefix, in_files[i].f,
+                                    out) < 0) {
+      error_set("cannot translate file (symbol_prefix = %s)",
+                in_files[i].symbol_prefix);
+      goto cleanup;
     }
   }
 
-  return 0;
+  retval = 0;
+cleanup:
+  fclose(bootstrap_vm_file);
+  return retval;
 }

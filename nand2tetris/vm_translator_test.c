@@ -597,8 +597,8 @@ void test_translate() {
     FILE *out = open_memstream(&out_buf, &out_len);
 
     Translator t = {0};
-    translator_init(&t, "Test");
-    int res = translator_translate(&t, in, out);
+    translator_init(&t);
+    int res = translator_translate_single(&t, "Test", in, out);
     translator_deinit(&t);
     fclose(in);
     fclose(out);
