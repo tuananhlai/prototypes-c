@@ -88,12 +88,10 @@ D=M-D
 M=-1
 @Main$L2
 D;JLT
+@SP
+A=M-1
 M=0
 (Main$L2)
-@SP
-AM=M+1
-A=A-1
-M=D
 @SP
 AM=M-1
 D=M

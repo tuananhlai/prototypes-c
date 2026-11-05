@@ -903,7 +903,6 @@ static int translator_translate_cmd(Translator *t, Command cmd, char **out) {
 
     *out = arena_sprintf(arena, "@SP\nAM=M-1\nD=M\n@SP\nA=M-1\n%s\n",
                          set_data_reg_cmd);
-    ;
     return 0;
   }
   case CMD_NEG:
@@ -929,21 +928,21 @@ static int translator_translate_cmd(Translator *t, Command cmd, char **out) {
     else
       conditional_jmp = "JLT";
 
-    const char *hack_assembly_compare =
-        arena_sprintf(arena,
-                      "@SP\n"
-                      "AM=M-1\n"
-                      "D=M\n"
-                      "@SP\n"
-                      "A=M-1\n"
-                      "D=M-D\n"
-                      "M=-1\n"
-                      "@%s\n"  // push true
-                      "D;%s\n" // conditional jump command
-                      "M=0\n"
-                      "(%s)\n", // push false
-                      keep_true_label, conditional_jmp, keep_true_label);
-    *out = arena_sprintf(arena, "%s%s", hack_assembly_compare, hack_asm_push);
+    *out = arena_sprintf(arena,
+                         "@SP\n"
+                         "AM=M-1\n"
+                         "D=M\n"
+                         "@SP\n"
+                         "A=M-1\n"
+                         "D=M-D\n"
+                         "M=-1\n"
+                         "@%s\n"
+                         "D;%s\n" // conditional jump command
+                         "@SP\n"
+                         "A=M-1\n"
+                         "M=0\n"
+                         "(%s)\n",
+                         keep_true_label, conditional_jmp, keep_true_label);
     return 0;
   }
   case CMD_LBL: {
