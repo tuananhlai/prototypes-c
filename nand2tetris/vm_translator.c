@@ -1059,55 +1059,7 @@ static int translator_translate_cmd(Translator *t, Command cmd, char **out) {
                       loop_label, loop_end_label, loop_label, loop_end_label);
     return 0;
   case CMD_RET:
-    *out = "@ARG\n"
-           "D=M\n"
-           "@R15\n"
-           "M=D\n"
-           "@SP\n"
-           "AM=M-1\n"
-           "D=M\n"
-           "@R13\n" // store result in R13
-           "M=D\n"
-           "@LCL\n" // *SP = *LCL
-           "D=M\n"
-           "@SP\n"
-           "AM=D-1\n"
-           "D=M\n"
-           "@THAT\n"
-           "M=D\n"
-           "@SP\n"
-           "AM=M-1\n"
-           "D=M\n"
-           "@THIS\n"
-           "M=D\n"
-           "@SP\n"
-           "AM=M-1\n"
-           "D=M\n"
-           "@ARG\n"
-           "M=D\n"
-           "@SP\n"
-           "AM=M-1\n"
-           "D=M\n"
-           "@LCL\n"
-           "M=D\n"
-           "@SP\n"
-           "AM=M-1\n"
-           "D=M\n"
-           "@R14\n"
-           "M=D\n"
-           "@R15\n" // *SP = old *ARGS
-           "D=M\n"
-           "@SP\n"
-           "M=D\n"
-           "@R13\n" // push result from R13 to top of the stack
-           "D=M\n"
-           "@SP\n"
-           "AM=M+1\n"
-           "A=A-1\n"
-           "M=D\n"
-           "@R14\n" // jump to return address stored in R14
-           "A=M\n"
-           "0;JMP\n";
+    *out = "@$RET\n0;JMP\n";
     return 0;
   }
 
@@ -1166,19 +1118,77 @@ typedef struct {
 /** Translate the given input files and write the result to `out`. */
 int translator_translate(Translator *t, size_t in_files_len,
                          VmInputFile in_files[in_files_len], FILE *out) {
-  const char *bootstrap_asm = "@256\nD=A\n@SP\nM=D\n";
-  const char *bootstrap_vm = "call Sys.init 0\n";
-  FILE *bootstrap_vm_file =
-      fmemopen((void *)bootstrap_vm, strlen(bootstrap_vm), "r");
+  const char *setup_sp_asm = "@256\n"
+                             "D=A\n"
+                             "@SP\n"
+                             "M=D\n";
+  const char *return_routine_asm =
+      "($RET)\n"
+      "@ARG\n"
+      "D=M\n"
+      "@R15\n"
+      "M=D\n"
+      "@SP\n"
+      "AM=M-1\n"
+      "D=M\n"
+      "@R13\n" // store result in R13
+      "M=D\n"
+      "@LCL\n" // *SP = *LCL
+      "D=M\n"
+      "@SP\n"
+      "AM=D-1\n"
+      "D=M\n"
+      "@THAT\n"
+      "M=D\n"
+      "@SP\n"
+      "AM=M-1\n"
+      "D=M\n"
+      "@THIS\n"
+      "M=D\n"
+      "@SP\n"
+      "AM=M-1\n"
+      "D=M\n"
+      "@ARG\n"
+      "M=D\n"
+      "@SP\n"
+      "AM=M-1\n"
+      "D=M\n"
+      "@LCL\n"
+      "M=D\n"
+      "@SP\n"
+      "AM=M-1\n"
+      "D=M\n"
+      "@R14\n"
+      "M=D\n"
+      "@R15\n" // *SP = old *ARGS
+      "D=M\n"
+      "@SP\n"
+      "M=D\n"
+      "@R13\n" // push result from R13 to top of the stack
+      "D=M\n"
+      "@SP\n"
+      "AM=M+1\n"
+      "A=A-1\n"
+      "M=D\n"
+      "@R14\n" // jump to return address stored in R14
+      "A=M\n"
+      "0;JMP\n";
+  const char *call_sys_init_vm = "call Sys.init 0\n";
+
+  FILE *call_sys_init_vm_file =
+      fmemopen((void *)call_sys_init_vm, strlen(call_sys_init_vm), "r");
 
   int retval = -1;
-  if (fputs(bootstrap_asm, out) == EOF) {
-    error_set("cannot write bootstrap asm");
+  if (fputs(setup_sp_asm, out) == EOF) {
+    error_set("cannot write setup stack pointer asm");
     goto cleanup;
   }
-
-  if (translator_translate_single(t, "", bootstrap_vm_file, out) < 0) {
+  if (translator_translate_single(t, "", call_sys_init_vm_file, out) < 0) {
     error_set("cannot write bootstrap vm code");
+    goto cleanup;
+  }
+  if (fputs(return_routine_asm, out) == EOF) {
+    error_set("cannot write return routine asm");
     goto cleanup;
   }
 
@@ -1193,6 +1203,6 @@ int translator_translate(Translator *t, size_t in_files_len,
 
   retval = 0;
 cleanup:
-  fclose(bootstrap_vm_file);
+  fclose(call_sys_init_vm_file);
   return retval;
 }
