@@ -738,7 +738,11 @@ typedef struct {
   // Prefix string for symbols within a file.
   const char *_symbol_prefix;
   // Name of the function for which we're currently processing commands.
-  char *_cur_func_name;
+  struct {
+    char *data;
+    size_t len;
+    size_t cap;
+  } _cur_func_name;
   // Counter used to generate unique internal labels.
   size_t _label_idx;
 } Translator;
@@ -749,10 +753,15 @@ void translator_init(Translator *t) {
   t->_parser = (Parser){0};
   parser_init(&t->_parser);
   t->_line_arena = (Arena){0};
+  t->_cur_func_name.data = nullptr;
+  t->_cur_func_name.len = 0;
+  t->_cur_func_name.cap = 0;
 }
 
 void translator_deinit(Translator *t) {
-  free(t->_cur_func_name);
+  t->_cur_func_name.len = 0;
+  t->_cur_func_name.cap = 0;
+  free(t->_cur_func_name.data);
   lexer_deinit(&t->_lexer);
   arena_free(&t->_line_arena);
 }
@@ -863,20 +872,20 @@ static int translator_translate_pop(Translator *t, CommandPopArgs args,
   }
 }
 
-static const char *translator_next_retaddr(Translator *t, size_t n,
-                                           const char fn_name[n]) {
-  return arena_sprintf(&t->_line_arena, "%.*s$ret.%zu", (int)n, fn_name,
+static const char *translator_next_retaddr(Translator *t) {
+  return arena_sprintf(&t->_line_arena, "%.*s$ret.%zu",
+                       (int)t->_cur_func_name.len, t->_cur_func_name.data,
                        t->_label_idx++);
 }
 
 static const char *translator_get_label(Translator *t, size_t n,
                                         const char label[n]) {
-  if (!t->_cur_func_name) {
+  if (t->_cur_func_name.len == 0) {
     return arena_sprintf(&t->_line_arena, "%.*s", (int)n, label);
   }
 
-  return arena_sprintf(&t->_line_arena, "%s$%.*s", t->_cur_func_name, (int)n,
-                       label);
+  return arena_sprintf(&t->_line_arena, "%s$%.*s", t->_cur_func_name.data,
+                       (int)n, label);
 }
 
 static int translator_translate_cmd(Translator *t, Command cmd, char **out) {
@@ -901,8 +910,8 @@ static int translator_translate_cmd(Translator *t, Command cmd, char **out) {
     else
       set_data_reg_cmd = "M=D|M";
 
-    *out = arena_sprintf(arena, "@SP\nAM=M-1\nD=M\nA=A-1\n%s\n",
-                         set_data_reg_cmd);
+    *out =
+        arena_sprintf(arena, "@SP\nAM=M-1\nD=M\nA=A-1\n%s\n", set_data_reg_cmd);
     return 0;
   }
   case CMD_NEG:
@@ -971,8 +980,7 @@ static int translator_translate_cmd(Translator *t, Command cmd, char **out) {
   case CMD_CALL: {
     CommandCallArgs args = cmd.args.call;
 
-    const char *return_addr =
-        translator_next_retaddr(t, args.fn_name_len, args.fn_name);
+    const char *return_addr = translator_next_retaddr(t);
 
     // Copy return address to R13, function instruction address to R14, ARG's
     // offset to R15, then jump to function call routine.
@@ -999,11 +1007,14 @@ static int translator_translate_cmd(Translator *t, Command cmd, char **out) {
   }
   case CMD_FUNC:
     CommandFuncArgs args = cmd.args.func;
-    if (!t->_cur_func_name || strlen(t->_cur_func_name) < args.fn_name_len) {
-      t->_cur_func_name = realloc(t->_cur_func_name, args.fn_name_len + 1);
+    if (t->_cur_func_name.cap < args.fn_name_len + 1) {
+      t->_cur_func_name.cap = args.fn_name_len + 1;
+      t->_cur_func_name.data =
+          realloc(t->_cur_func_name.data, t->_cur_func_name.cap);
     }
-    t->_cur_func_name[args.fn_name_len] = '\0';
-    memcpy(t->_cur_func_name, args.fn_name, args.fn_name_len);
+    t->_cur_func_name.len = args.fn_name_len;
+    t->_cur_func_name.data[args.fn_name_len] = '\0';
+    memcpy(t->_cur_func_name.data, args.fn_name, args.fn_name_len);
 
     const char *loop_label = translator_gen_label(t);
     const char *loop_end_label = translator_gen_label(t);
@@ -1055,7 +1066,6 @@ static int translator_translate_cmd(Translator *t, Command cmd, char **out) {
 int translator_translate_single(Translator *t, const char *symbol_prefix,
                                 FILE *in, FILE *out) {
   t->_symbol_prefix = symbol_prefix;
-  t->_label_idx = 0;
 
   while (true) {
     arena_reset(&t->_line_arena);

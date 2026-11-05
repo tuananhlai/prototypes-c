@@ -222,13 +222,8 @@ void test_translate() {
           .expected_hack = "@SP\n"
                            "AM=M-1\n"
                            "D=M\n"
-                           "@SP\n"
-                           "AM=M-1\n"
-                           "D=D+M\n"
-                           "@SP\n"
-                           "AM=M+1\n"
                            "A=A-1\n"
-                           "M=D\n",
+                           "M=D+M\n",
       },
       {
           .name = "should translate 'eq'",
@@ -237,19 +232,15 @@ void test_translate() {
                            "AM=M-1\n"
                            "D=M\n"
                            "@SP\n"
-                           "AM=M-1\n"
+                           "A=M-1\n"
                            "D=M-D\n"
+                           "M=-1\n"
                            "@Test$L0\n"
                            "D;JEQ\n"
-                           "@Test$L1\n"
-                           "D=0;JMP\n"
-                           "(Test$L0)\n"
-                           "D=-1\n"
-                           "(Test$L1)\n"
                            "@SP\n"
-                           "AM=M+1\n"
-                           "A=A-1\n"
-                           "M=D\n",
+                           "A=M-1\n"
+                           "M=0\n"
+                           "(Test$L0)\n",
       },
       {
           .name = "should translate 'gt'",
@@ -258,19 +249,15 @@ void test_translate() {
                            "AM=M-1\n"
                            "D=M\n"
                            "@SP\n"
-                           "AM=M-1\n"
+                           "A=M-1\n"
                            "D=M-D\n"
+                           "M=-1\n"
                            "@Test$L0\n"
                            "D;JGT\n"
-                           "@Test$L1\n"
-                           "D=0;JMP\n"
-                           "(Test$L0)\n"
-                           "D=-1\n"
-                           "(Test$L1)\n"
                            "@SP\n"
-                           "AM=M+1\n"
-                           "A=A-1\n"
-                           "M=D\n",
+                           "A=M-1\n"
+                           "M=0\n"
+                           "(Test$L0)\n",
       },
       {
           .name = "should translate 'lt'",
@@ -279,41 +266,29 @@ void test_translate() {
                            "AM=M-1\n"
                            "D=M\n"
                            "@SP\n"
-                           "AM=M-1\n"
+                           "A=M-1\n"
                            "D=M-D\n"
+                           "M=-1\n"
                            "@Test$L0\n"
                            "D;JLT\n"
-                           "@Test$L1\n"
-                           "D=0;JMP\n"
-                           "(Test$L0)\n"
-                           "D=-1\n"
-                           "(Test$L1)\n"
                            "@SP\n"
-                           "AM=M+1\n"
-                           "A=A-1\n"
-                           "M=D\n",
+                           "A=M-1\n"
+                           "M=0\n"
+                           "(Test$L0)\n",
       },
       {
           .name = "should translate 'not'",
           .vm_code = "not\n",
           .expected_hack = "@SP\n"
-                           "AM=M-1\n"
-                           "D=!M\n"
-                           "@SP\n"
-                           "AM=M+1\n"
-                           "A=A-1\n"
-                           "M=D\n",
+                           "A=M-1\n"
+                           "M=!M\n",
       },
       {
           .name = "should translate 'neg'",
           .vm_code = "neg\n",
           .expected_hack = "@SP\n"
-                           "AM=M-1\n"
-                           "D=-M\n"
-                           "@SP\n"
-                           "AM=M+1\n"
-                           "A=A-1\n"
-                           "M=D\n",
+                           "A=M-1\n"
+                           "M=-M\n",
       },
       {
           .name = "should translate 'sub'",
@@ -321,13 +296,8 @@ void test_translate() {
           .expected_hack = "@SP\n"
                            "AM=M-1\n"
                            "D=M\n"
-                           "@SP\n"
-                           "AM=M-1\n"
-                           "D=M-D\n"
-                           "@SP\n"
-                           "AM=M+1\n"
                            "A=A-1\n"
-                           "M=D\n",
+                           "M=M-D\n",
       },
       {
           .name = "should translate 'and'",
@@ -335,13 +305,8 @@ void test_translate() {
           .expected_hack = "@SP\n"
                            "AM=M-1\n"
                            "D=M\n"
-                           "@SP\n"
-                           "AM=M-1\n"
-                           "D=D&M\n"
-                           "@SP\n"
-                           "AM=M+1\n"
                            "A=A-1\n"
-                           "M=D\n",
+                           "M=D&M\n",
       },
       {
           .name = "should translate 'or'",
@@ -349,13 +314,8 @@ void test_translate() {
           .expected_hack = "@SP\n"
                            "AM=M-1\n"
                            "D=M\n"
-                           "@SP\n"
-                           "AM=M-1\n"
-                           "D=D|M\n"
-                           "@SP\n"
-                           "AM=M+1\n"
                            "A=A-1\n"
-                           "M=D\n",
+                           "M=D|M\n",
       },
       {
           .name = "should translate 'label'",
@@ -386,50 +346,21 @@ void test_translate() {
       {
           .name = "should translate 'call'",
           .vm_code = "call Sys.main 2",
-          .expected_hack =
-              "@Sys.main$ret.0\n" // push return address
-              "D=A\n"
-              "@SP\n"
-              "AM=M+1\n"
-              "A=A-1\n"
-              "M=D\n"
-              "@LCL\n" // push LCL base address
-              "D=M\n"
-              "@SP\n"
-              "AM=M+1\n"
-              "A=A-1\n"
-              "M=D\n"
-              "@ARG\n" // push ARG base address
-              "D=M\n"
-              "@SP\n"
-              "AM=M+1\n"
-              "A=A-1\n"
-              "M=D\n"
-              "@THIS\n"
-              "D=M\n"
-              "@SP\n"
-              "AM=M+1\n"
-              "A=A-1\n"
-              "M=D\n"
-              "@THAT\n"
-              "D=M\n"
-              "@SP\n"
-              "AM=M+1\n"
-              "A=A-1\n"
-              "M=D\n"
-              "@7\n" // *ARG = *SP - frame_size - number of arguments
-              "D=A\n"
-              "@SP\n"
-              "D=M-D\n"
-              "@ARG\n"
-              "M=D\n"
-              "@SP\n" // *LCL = *SP
-              "D=M\n"
-              "@LCL\n"
-              "M=D\n"
-              "@Sys.main\n" // jump to the target function
-              "0;JMP\n"
-              "(Sys.main$ret.0)\n",
+          .expected_hack = "@$ret.0\n"
+                           "D=A\n"
+                           "@R13\n"
+                           "M=D\n"
+                           "@Sys.main\n"
+                           "D=A\n"
+                           "@R14\n"
+                           "M=D\n"
+                           "@7\n"
+                           "D=A\n"
+                           "@R15\n"
+                           "M=D\n"
+                           "@$CALL\n"
+                           "0;JMP\n"
+                           "($ret.0)\n",
       },
       {
           .name = "should translate function declaration",
@@ -463,24 +394,6 @@ void test_translate() {
               "6\ngoto END\nlabel PUSH9\npush constant 9\nlabel "
               "END\nreturn\n",
           .expected_hack = "(Test)\n"
-                           "@0\n"
-                           "D=A\n"
-                           "@R13\n"
-                           "M=D\n"
-                           "(Test$L0)\n"
-                           "@R13\n"
-                           "D=M\n"
-                           "@Test$L1\n"
-                           "D;JEQ\n"
-                           "@SP\n"
-                           "AM=M+1\n"
-                           "A=A-1\n"
-                           "M=0\n"
-                           "@R13\n"
-                           "M=M-1\n"
-                           "@Test$L0\n"
-                           "0;JMP\n"
-                           "(Test$L1)\n"
                            "@ARG\n"
                            "D=M\n"
                            "@0\n"
@@ -511,54 +424,7 @@ void test_translate() {
                            "A=A-1\n"
                            "M=D\n"
                            "(Test$END)\n"
-                           "@ARG\n"
-                           "D=M\n"
-                           "@R15\n"
-                           "M=D\n"
-                           "@SP\n"
-                           "AM=M-1\n"
-                           "D=M\n"
-                           "@R13\n"
-                           "M=D\n"
-                           "@LCL\n"
-                           "D=M\n"
-                           "@SP\n"
-                           "AM=D-1\n"
-                           "D=M\n"
-                           "@THAT\n"
-                           "M=D\n"
-                           "@SP\n"
-                           "AM=M-1\n"
-                           "D=M\n"
-                           "@THIS\n"
-                           "M=D\n"
-                           "@SP\n"
-                           "AM=M-1\n"
-                           "D=M\n"
-                           "@ARG\n"
-                           "M=D\n"
-                           "@SP\n"
-                           "AM=M-1\n"
-                           "D=M\n"
-                           "@LCL\n"
-                           "M=D\n"
-                           "@SP\n"
-                           "AM=M-1\n"
-                           "D=M\n"
-                           "@R14\n"
-                           "M=D\n"
-                           "@R15\n"
-                           "D=M\n"
-                           "@SP\n"
-                           "M=D\n"
-                           "@R13\n"
-                           "D=M\n"
-                           "@SP\n"
-                           "AM=M+1\n"
-                           "A=A-1\n"
-                           "M=D\n"
-                           "@R14\n"
-                           "A=M\n"
+                           "@$RET\n"
                            "0;JMP\n",
       },
       {
