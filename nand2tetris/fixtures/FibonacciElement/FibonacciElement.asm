@@ -178,7 +178,6 @@ M=D
 @SP
 AM=M-1
 D=M
-@SP
 A=M-1
 M=M-D
 @Main.fibonacci$ret.3
@@ -214,7 +213,6 @@ M=D
 @SP
 AM=M-1
 D=M
-@SP
 A=M-1
 M=M-D
 @Main.fibonacci$ret.4
@@ -235,7 +233,6 @@ M=D
 @SP
 AM=M-1
 D=M
-@SP
 A=M-1
 M=D+M
 @$RET

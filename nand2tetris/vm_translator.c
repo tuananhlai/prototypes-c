@@ -901,7 +901,7 @@ static int translator_translate_cmd(Translator *t, Command cmd, char **out) {
     else
       set_data_reg_cmd = "M=D|M";
 
-    *out = arena_sprintf(arena, "@SP\nAM=M-1\nD=M\n@SP\nA=M-1\n%s\n",
+    *out = arena_sprintf(arena, "@SP\nAM=M-1\nD=M\nA=M-1\n%s\n",
                          set_data_reg_cmd);
     return 0;
   }
