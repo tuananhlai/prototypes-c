@@ -974,54 +974,27 @@ static int translator_translate_cmd(Translator *t, Command cmd, char **out) {
     const char *return_addr =
         translator_next_retaddr(t, args.fn_name_len, args.fn_name);
 
-    *out =
-        arena_sprintf(arena,
-                      "@%s\n" // push return address, current value of LCL,
-                              // ARGS, THIS, THAT to stack
-                      "D=A\n"
-                      "@SP\n"
-                      "AM=M+1\n"
-                      "A=A-1\n"
-                      "M=D\n"
-                      "@LCL\n"
-                      "D=M\n"
-                      "@SP\n"
-                      "AM=M+1\n"
-                      "A=A-1\n"
-                      "M=D\n"
-                      "@ARG\n"
-                      "D=M\n"
-                      "@SP\n"
-                      "AM=M+1\n"
-                      "A=A-1\n"
-                      "M=D\n"
-                      "@THIS\n"
-                      "D=M\n"
-                      "@SP\n"
-                      "AM=M+1\n"
-                      "A=A-1\n"
-                      "M=D\n"
-                      "@THAT\n"
-                      "D=M\n"
-                      "@SP\n"
-                      "AM=M+1\n"
-                      "A=A-1\n"
-                      "M=D\n"
-                      "@%zu\n" // *ARG = *SP - frame_size - number of arguments
-                      "D=A\n"
-                      "@SP\n"
-                      "D=M-D\n"
-                      "@ARG\n"
-                      "M=D\n"
-                      "@SP\n" // *LCL = *SP
-                      "D=M\n"
-                      "@LCL\n"
-                      "M=D\n"
-                      "@%.*s\n" // jump to the target function
-                      "0;JMP\n"
-                      "(%s)\n",
-                      return_addr, FN_FRAME_SIZE + args.n_args,
-                      (int)args.fn_name_len, args.fn_name, return_addr);
+    // Copy return address to R13, function instruction address to R14, ARG's
+    // offset to R15, then jump to function call routine.
+    *out = arena_sprintf(arena,
+                         "@%s\n" // push return address, current value of LCL,
+                                 // ARGS, THIS, THAT to stack
+                         "D=A\n"
+                         "@R13\n"
+                         "M=D\n"
+                         "@%.*s\n"
+                         "D=A\n"
+                         "@R14\n"
+                         "M=D\n"
+                         "@%zu\n"
+                         "D=A\n"
+                         "@R15\n"
+                         "M=D\n"
+                         "@$CALL\n"
+                         "0;JMP\n"
+                         "(%s)\n",
+                         return_addr, (int)args.fn_name_len, args.fn_name,
+                         FN_FRAME_SIZE + args.n_args, return_addr);
     return 0;
   }
   case CMD_FUNC:
@@ -1173,6 +1146,51 @@ int translator_translate(Translator *t, size_t in_files_len,
       "@R14\n" // jump to return address stored in R14
       "A=M\n"
       "0;JMP\n";
+  const char *call_routine_asm =
+      "($CALL)\n"
+      "@R13\n" // return address
+      "D=M\n"
+      "@SP\n"
+      "AM=M+1\n"
+      "A=A-1\n"
+      "M=D\n"
+      "@LCL\n"
+      "D=M\n"
+      "@SP\n"
+      "AM=M+1\n"
+      "A=A-1\n"
+      "M=D\n"
+      "@ARG\n"
+      "D=M\n"
+      "@SP\n"
+      "AM=M+1\n"
+      "A=A-1\n"
+      "M=D\n"
+      "@THIS\n"
+      "D=M\n"
+      "@SP\n"
+      "AM=M+1\n"
+      "A=A-1\n"
+      "M=D\n"
+      "@THAT\n"
+      "D=M\n"
+      "@SP\n"
+      "AM=M+1\n"
+      "A=A-1\n"
+      "M=D\n"
+      "@R15\n" // *ARG = *SP - frame_size - number of arguments
+      "D=M\n"
+      "@SP\n"
+      "D=M-D\n"
+      "@ARG\n"
+      "M=D\n"
+      "@SP\n" // *LCL = *SP
+      "D=M\n"
+      "@LCL\n"
+      "M=D\n"
+      "@R14\n"
+      "A=M\n"
+      "0;JMP\n";
   const char *call_sys_init_vm = "call Sys.init 0\n";
 
   FILE *call_sys_init_vm_file =
@@ -1189,6 +1207,10 @@ int translator_translate(Translator *t, size_t in_files_len,
   }
   if (fputs(return_routine_asm, out) == EOF) {
     error_set("cannot write return routine asm");
+    goto cleanup;
+  }
+  if (fputs(call_routine_asm, out) == EOF) {
+    error_set("cannot write call routine asm");
     goto cleanup;
   }
 
