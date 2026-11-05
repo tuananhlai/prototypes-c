@@ -1007,29 +1007,42 @@ static int translator_translate_cmd(Translator *t, Command cmd, char **out) {
 
     const char *loop_label = translator_gen_label(t);
     const char *loop_end_label = translator_gen_label(t);
-    *out =
-        arena_sprintf(&t->_line_arena,
-                      "(%.*s)\n" // fn name
-                      "@%zu\n"
-                      "D=A\n"
-                      "@R13\n"
-                      "M=D\n"
-                      "(%s)\n" // loop start
-                      "@R13\n"
-                      "D=M\n"
-                      "@%s\n" // loop end
-                      "D;JEQ\n"
-                      "@SP\n"
-                      "AM=M+1\n"
-                      "A=A-1\n"
-                      "M=0\n"
-                      "@R13\n"
-                      "M=M-1\n"
-                      "@%s\n" // loop start
-                      "0;JMP\n"
-                      "(%s)\n", // loop end
-                      (int)args.fn_name_len, args.fn_name, args.n_vars,
-                      loop_label, loop_end_label, loop_label, loop_end_label);
+    if (args.n_vars == 0) {
+      *out =
+          arena_sprintf(arena, "(%.*s)\n", (int)args.fn_name_len, args.fn_name);
+    } else if (args.n_vars == 1) {
+      *out = arena_sprintf(arena,
+                           "(%.*s)\n"
+                           "@SP\n"
+                           "AM=M+1\n"
+                           "A=A-1\n"
+                           "M=0\n",
+                           (int)args.fn_name_len, args.fn_name);
+    } else {
+      *out =
+          arena_sprintf(arena,
+                        "(%.*s)\n"
+                        "@%zu\n"
+                        "D=A\n"
+                        "@R13\n"
+                        "M=D\n"
+                        "(%s)\n" // loop start
+                        "@R13\n"
+                        "D=M\n"
+                        "@%s\n" // loop end
+                        "D;JEQ\n"
+                        "@SP\n"
+                        "AM=M+1\n"
+                        "A=A-1\n"
+                        "M=0\n"
+                        "@R13\n"
+                        "M=M-1\n"
+                        "@%s\n" // loop start
+                        "0;JMP\n"
+                        "(%s)\n",
+                        (int)args.fn_name_len, args.fn_name, args.n_vars,
+                        loop_label, loop_end_label, loop_label, loop_end_label);
+    }
     return 0;
   case CMD_RET:
     *out = "@$RET\n0;JMP\n";
