@@ -9,16 +9,20 @@
 		"ghcr.io/devcontainers/features/docker-outside-of-docker:1": {
 			// moby: true is not supported on debian 13 (trixie).
 			"moby": false
-		}
+		},
+		// nand2tetris deps
+		"ghcr.io/devcontainers/features/desktop-lite:1": {},
+		"ghcr.io/devcontainers/features/java:1": {}
 	},
 	// Use 'forwardPorts' to make a list of ports inside the container available locally.
-	// "forwardPorts": [],
+	"forwardPorts": [6080],
 	// Use 'postCreateCommand' to run commands after the container is created.
 	"postCreateCommand": "zsh ./.devcontainer/post_create.sh",
 	"customizations": {
 		"vscode": {
 			"extensions": [
-				"llvm-vs-code-extensions.vscode-clangd"
+				"llvm-vs-code-extensions.vscode-clangd",
+				"google.google-antigravity"
 			]
 		}
 	}

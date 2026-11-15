@@ -25,3 +25,10 @@ RUN NONINTERACTIVE=1 /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.co
     brew install gh go-task && \
     # Remove all cache files to reduce image size.
     brew cleanup --prune=all
+
+# Install Nand2Tetris software suite (JackCompiler.sh, VMEmulator.sh, etc.).
+RUN curl -fsSL "https://drive.usercontent.google.com/download?id=1xZzcMIUETv3u3sdpM_oTJSTetpVee3KZ&confirm=t" -o /tmp/nand2tetris.zip && \
+    unzip -q /tmp/nand2tetris.zip -d /home/vscode && \
+    rm /tmp/nand2tetris.zip && \
+    chmod +x /home/vscode/nand2tetris/tools/*.sh && \
+    echo 'export PATH="$HOME/nand2tetris/tools:$PATH"' >> /home/vscode/.zshrc
