@@ -4,7 +4,7 @@
 #include <time.h>
 
 #define UNIT_TEST
-#include "chap8_exs1_my-strtod.c"
+#include "chap8_exs61_my-strtod.c"
 
 void test_mystrtod() {
   struct {
