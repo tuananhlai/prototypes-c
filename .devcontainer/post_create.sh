@@ -2,7 +2,10 @@
 
 set -e
 
-# Set the ZSH theme to "robbyrussell".
-sed -i '/^ZSH_THEME/c\ZSH_THEME="robbyrussell"' ~/.zshrc
 # Disable Address Space Layout Randomization due to permission error when running inside a container.
 echo "settings set target.disable-aslr false" >> ~/.lldbinit
+
+# Configure ZSH theme & plugins.
+source ~/.oh-my-zsh/oh-my-zsh.sh
+omz theme set fino
+omz plugin enable timer
