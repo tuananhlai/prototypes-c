@@ -61,14 +61,14 @@ char const *rat_print(size_t len, char out[len], rat const *x) {
 }
 
 char const *rat_normalize_print(size_t len, char out[len], rat const *x) {
-  auto y = rat_get_normal(*x);
+  rat y = rat_get_normal(*x);
   return rat_print(len, out, &y);
 }
 
 rat *rat_dotproduct(rat rp[static 1], size_t n, rat const A[n],
                     rat const B[n]) {
   for (size_t i = 0; i < n; i++) {
-    auto prod = rat_get_prod(A[i], B[i]);
+    rat prod = rat_get_prod(A[i], B[i]);
     rat_sumup(rp, prod);
   }
 
@@ -108,7 +108,7 @@ int main(void) {
       .sign = 0,
   };
   char out[60];
-  auto res = rat_print(sizeof out, out, &x);
+  const char* res = rat_print(sizeof out, out, &x);
   if (!res) {
     puts("out char array has insufficient length");
   } else {

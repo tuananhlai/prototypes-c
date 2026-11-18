@@ -34,7 +34,7 @@ static void blob_split(Blob *blob, size_t split_idx, Blob *out) {
   if (split_idx >= blob->len)
     return;
 
-  auto original_next = blob->next;
+  Blob *original_next = blob->next;
   blob_init(out, blob->len - split_idx, blob->val + split_idx, blob,
             original_next);
   blob->len = split_idx;
@@ -84,7 +84,7 @@ static Blob *text_blob_join(Text *text, const Blob *prev, const Blob *next) {
 }
 
 static void text_split_lines(Text *text) {
-  for (auto x = text->head; x; x = x->next) {
+  for (Blob *x = text->head; x; x = x->next) {
     const char *newline;
     while (true) {
       newline = memchr(x->val, '\n', x->len);
@@ -96,7 +96,7 @@ static void text_split_lines(Text *text) {
     if (newline == nullptr)
       break;
 
-    auto idx = newline - x->val;
+    ptrdiff_t idx = newline - x->val;
     assert(idx >= 0);
     if ((size_t)idx == x->len - 1)
       continue;
@@ -107,36 +107,60 @@ static void text_split_lines(Text *text) {
 }
 
 void text_print(Text *text) {
-  for (auto x = text->head; x; x = x->next) {
+  for (Blob *x = text->head; x; x = x->next) {
     fwrite(x->val, sizeof(char), x->len, stdout);
   }
 }
 
+typedef struct {
+  Blob *blob;
+  size_t blob_val_idx;
+} Position;
+
+bool position_isend(Position p) { return p.blob == nullptr; }
+
+void position_increment(Position *p) {
+  if (position_isend(*p))
+    return;
+
+  if (p->blob_val_idx < p->blob->len - 1) {
+    p->blob_val_idx++;
+    return;
+  }
+
+  p->blob = p->blob->next;
+  p->blob_val_idx = 0;
+}
+
+char position_value(Position p) {
+  if (position_isend(p))
+    return 0;
+
+  return p.blob->val[p.blob_val_idx];
+}
+
 // TODO: prevent cutoff in the middle of words.
 void text_print_screen(Text *text, size_t width, size_t height) {
-  auto x = text->head;
-  size_t blob_val_idx = 0;
+  Position cur_pos = {
+      .blob = text->head,
+      .blob_val_idx = 0,
+  };
   size_t line_cnt = 0;
   size_t col_cnt = 0;
 
   while (true) {
-    if (line_cnt == height || x == nullptr) return;
+    if (line_cnt == height || cur_pos.blob == nullptr)
+      return;
 
-    if (blob_val_idx >= x->len) {
-      x = x->next;
-      blob_val_idx = 0;
-      continue;
-    }
-
-    putchar(x->val[blob_val_idx]);
-    if (x->val[blob_val_idx] == '\n') {
+    putchar(cur_pos.blob->val[cur_pos.blob_val_idx]);
+    if (position_value(cur_pos) == '\n') {
       line_cnt++;
       col_cnt = 0;
-      blob_val_idx++;
+      position_increment(&cur_pos);
       continue;
     }
 
-    blob_val_idx++;
+    position_increment(&cur_pos);
     col_cnt++;
     if (col_cnt == width) {
       putchar('\n');
