@@ -29,7 +29,7 @@ static size_t sh_entry_idx(HashMap *hm, const char *key) {
 HashMap *sh_create() { 
   HashMap* hm = malloc(sizeof(HashMap));
   hm->cap = 16;
-  Entry* entries = calloc(sizeof(Entry), hm->cap);
+  Entry* entries = calloc(hm->cap, sizeof(Entry));
   hm->entries = entries;
   return hm; 
 }
@@ -79,11 +79,7 @@ void sh_delete(HashMap *hm, const char *key) {
   }
 
   if (hm->entries[entry_idx].state == ST_EMPTY) return;
-  hm->entries[entry_idx] = (Entry){
-    .key = nullptr,
-    .value = 0,
-    .state = ST_TOMBSTONE,
-  };
+  hm->entries[entry_idx].state = ST_TOMBSTONE;
 }
 void sh_destroy(HashMap *hm) {
   free(hm->entries);
