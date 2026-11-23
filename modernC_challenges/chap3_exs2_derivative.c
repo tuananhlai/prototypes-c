@@ -1,21 +1,16 @@
 #include <stdio.h>
 
-typedef double (*Function)(double);
+typedef double Function(double);
 
-typedef struct {
-  Function f;
-} Derivative;
-
-double evaluate(Derivative* de, double x) {
+double deriv_real(Function f, double x) {
   double h = 1e-5;
-  return (de->f(x + h) - de->f(x - h)) / (2.0 * h);
+  return (f(x + h) - f(x - h)) / (2.0 * h);
 }
 
-double square(double x) { return x * x; }
+double sample_fn(double x) { return x * x; }
 
 int main() {
-  Derivative derivative = {square};
-  double result = evaluate(&derivative, 29);
+  double result = deriv_real(&sample_fn, 29);
   printf("%f\n", result);
   return 0;
 }
