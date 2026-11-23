@@ -33,24 +33,29 @@ double complex deriv_complex(ComplexFn f, double complex x) {
 #define deriv(F, X)                                                            \
   _Generic((X), double complex: deriv_complex, default: deriv_real)((F), (X))
 
-double sample_fn(double x) { return x * x - 2; }
+double sample_fn(double x) { return x * x - 3; }
 double complex sample_complex_fn(double complex x) { return x * x; }
 
-double find_root(RealFn f) {
-  size_t const MAX_GUESS = 100;
-  double guess_x = 100;
+// Find the root (x so that f(x) == 0) using Newton's method.
+bool find_root(RealFn f, double x0, double tol, size_t max_iter,
+               double *out_root) {
+  double guess_x = x0;
   size_t guess_attempts = 0;
   while (true) {
-    if (guess_attempts == MAX_GUESS) break;
+    if (guess_attempts == max_iter)
+      break;
 
     double y = f(guess_x);
-    if (fabs(y) < 1e-5) break;
+    if (fabs(y) < tol) {
+      *out_root = guess_x;
+      return true;
+    };
 
     guess_x = guess_x - (y / deriv_real(f, guess_x));
     guess_attempts++;
   }
 
-  return guess_x;
+  return false;
 }
 
 int main(void) {
@@ -58,6 +63,12 @@ int main(void) {
   double complex v2 = deriv(sample_complex_fn, 1.0 + I);
   printf("%f %f + %fi\n", v, creal(v2), cimag(v2));
 
-  printf("%f\n", find_root(sample_fn));
+  double root = 0;
+  bool res = find_root(sample_fn, -1.5, 1e-10, 100, &root);
+  if (res) {
+    printf("root found: %f\n", root);
+  } else {
+    puts("root not found");
+  }
   return EXIT_SUCCESS;
 }
