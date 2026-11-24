@@ -34,7 +34,7 @@ double complex deriv_complex(ComplexFn f, double complex x) {
   _Generic((X), double complex: deriv_complex, default: deriv_real)((F), (X))
 
 double sample_fn(double x) { return x * x - 3; }
-double complex sample_complex_fn(double complex x) { return x * x + 3; }
+double complex sample_complex_fn(double complex x) { return x * x + x + 100; }
 
 // Find the root (x so that f(x) == 0) using Newton's method.
 bool find_root_real(RealFn f, double x0, double tol, size_t max_iter,
