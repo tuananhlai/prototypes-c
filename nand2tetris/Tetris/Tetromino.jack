@@ -3,9 +3,7 @@ class Tetromino {
   field int y;
   field int size;
 
-  constructor Tetromino new(int ax, int ay, int asize) {
-    let x = ax;
-    let y = ay;
+  constructor Tetromino new(int asize) {
     let size = asize;
     return this;
   }
@@ -21,12 +19,17 @@ class Tetromino {
     return;
   }
 
+  method void setCoord(int ax, int ay) {
+    let x = ax;
+    let y = ay;
+    return;
+  }
+
   method void render() {
     do Tetromino.drawSquare(x, y, size);
     do Tetromino.drawSquare(x, y + size, size);
     do Tetromino.drawSquare(x + size, y + size, size);
     do Tetromino.drawSquare(x + (size * 2), y + size, size);
-
     return;
   }
 }

@@ -1,11 +1,35 @@
-function Main.main 1
+function Main.main 3
 push constant 0
+pop local 1
 push constant 0
-push constant 9
-call Tetromino.new 3
+pop local 2
+push constant 12
+call Tetromino.new 1
 pop local 0
+label WHILE_EXP0
+push local 2
+push constant 200
+lt
+not
+if-goto WHILE_END0
+push constant 500
+call Sys.wait 1
+pop temp 0
+call Screen.clearScreen 0
+pop temp 0
+push local 0
+push local 1
+push local 2
+call Tetromino.setCoord 3
+pop temp 0
 push local 0
 call Tetromino.render 1
 pop temp 0
+push local 2
+push constant 12
+add
+pop local 2
+goto WHILE_EXP0
+label WHILE_END0
 push constant 0
 return

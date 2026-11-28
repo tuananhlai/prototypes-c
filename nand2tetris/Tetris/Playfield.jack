@@ -1,0 +1,25 @@
+class Playfield {
+  // TODO: initialize this static variable.
+  static int BLOCK_WIDTH;
+  field int x;
+  field int y;
+
+  constructor Playfield new(int ax, int ay) {
+    let x = ax;
+    let y = ay;
+    return this;
+  }
+
+  function void drawUnfilledRectangle(int x1, int y1, int x2, int y2, int borderWidth) {
+    do Screen.setColor(true);
+    do Screen.drawLine(x1, y1, x2, y1);
+    do Screen.drawLine(x1, y1, x1, y2);
+    do Screen.drawLine(x2, y1, x2, y2);
+    do Screen.drawLine(x1, y2, x2, y2);
+    return;
+  }
+
+  method void render() {
+    return;
+  }
+}

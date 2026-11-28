@@ -1,9 +1,20 @@
 class Main {
   function void main() {
     var Tetromino tet;
+    var int tetx;
+    var int tety;
 
-    let tet = Tetromino.new(0, 0, 9);
-    do tet.render();
+    let tetx = 0;
+    let tety = 0;
+    let tet = Tetromino.new(12);
+
+    while (tety < 200) {
+      do Sys.wait(500);
+      do Screen.clearScreen();
+      do tet.setCoord(tetx, tety);
+      do tet.render();
+      let tety = tety + 12;
+    }
 
     return;
   }
