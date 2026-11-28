@@ -1,40 +1,10 @@
 class Main {
-  static int SCREEN_WIDTH;
-  static int SCREEN_HEIGHT;
-
-  function bool isEven(int v) {
-    return v = (Math.divide(v, 2) * 2);
-  }
-
   function void main() {
-    var int blockWidth;
-    var int x;
-    var int y;
-    var int i;
+    var Tetromino tet;
 
-    let SCREEN_WIDTH = 512;
-    let SCREEN_HEIGHT = 256;
-    let blockWidth = 16;
-    let x = 64;
-    let y = 0;
-    let i = 0;
+    let tet = Tetromino.new(0, 0, 9);
+    do tet.render();
 
-    while ((x < SCREEN_WIDTH) & (y < SCREEN_HEIGHT)) {
-      do Screen.setColor(true);
-      do Screen.drawRectangle(x, y, x + blockWidth - 1, y + blockWidth - 1);
-      do Screen.setColor(false);
-      do Screen.drawLine(x, y, x + blockWidth - 1, y);
-      do Screen.drawLine(x, y, x, y + blockWidth - 1);
-      do Screen.drawLine(x + blockWidth - 1, y, x + blockWidth - 1, y + blockWidth - 1);
-      do Screen.drawLine(x, y + blockWidth - 1, x + blockWidth - 1, y + blockWidth - 1);
-
-      if (Main.isEven(i)) {
-        let x = x + blockWidth;  
-      } else {
-        let y = y + blockWidth;
-      }
-      let i = i + 1;
-    }
     return;
   }
 }
